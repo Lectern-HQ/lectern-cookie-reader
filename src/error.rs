@@ -11,6 +11,10 @@ pub enum Error {
     DatabaseNotFound(PathBuf),
     /// The cookie database could not be copied or read.
     DatabaseUnreadable { path: PathBuf, reason: String },
+    /// The copied cookie database could be opened but not queried (unexpected layout).
+    DatabaseQuery(String),
+    /// The private temporary folder could not be created or written.
+    WorkFolder { path: PathBuf, reason: String },
     /// The database uses a format this version does not understand. Reading it anyway
     /// could return wrong values, so the crate refuses.
     UnsupportedDatabaseVersion(i64),
@@ -39,6 +43,14 @@ impl fmt::Display for Error {
                 write!(
                     f,
                     "cannot read cookie database {}: {reason}",
+                    path.display()
+                )
+            }
+            Error::DatabaseQuery(reason) => write!(f, "cannot query cookie database: {reason}"),
+            Error::WorkFolder { path, reason } => {
+                write!(
+                    f,
+                    "cannot use the private work folder {}: {reason}",
                     path.display()
                 )
             }
