@@ -1,0 +1,14 @@
+[package]
+name = "lectern-cookie-reader"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Reads the login cookies for one website from a browser on your own computer, with your permission."
+license = "Apache-2.0"
+repository = "https://github.com/Lectern-HQ/lectern-cookie-reader"
+readme = "README.md"
+keywords = ["cookies", "browser", "keychain", "macos"]
+categories = ["authentication", "os::macos-apis"]
+
+[dependencies]
+zeroize = "1.9"
