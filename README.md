@@ -71,6 +71,7 @@ Tested: Dia on macOS. Planned: finding which browser and profile is logged in, o
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
+cargo llvm-cov --fail-under-lines 90   # coverage, needs cargo-llvm-cov
 ```
 
 Tests use generated databases and test keys only, never real cookies.
