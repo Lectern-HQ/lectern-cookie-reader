@@ -9,6 +9,9 @@
 //! anything over the network, or put a cookie value in a log or an error message.
 
 mod browser;
+// Used by the database reader in the next step (issue #12).
+#[allow(dead_code)]
+mod chromium;
 mod cookie;
 mod error;
 
