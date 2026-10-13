@@ -25,6 +25,8 @@ const ITERATIONS: u32 = 1003;
 const IV: [u8; 16] = [b' '; 16];
 
 /// Turns the browser's "Safe Storage" password into the AES key.
+// Only the macOS Keychain gives a password. Windows stores the key itself (issue #18).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn derive_key(password: &[u8]) -> Zeroizing<[u8; 16]> {
     let mut key = Zeroizing::new([0u8; 16]);
     pbkdf2::pbkdf2_hmac::<sha1::Sha1>(password, SALT, ITERATIONS, key.as_mut());

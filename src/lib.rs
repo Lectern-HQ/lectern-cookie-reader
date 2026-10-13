@@ -9,21 +9,18 @@
 //! anything over the network, or put a cookie value in a log or an error message.
 
 mod browser;
-// Used by the cookie lookup in a later step (issue #10).
-#[allow(dead_code)]
 mod chromium;
 mod cookie;
-// Used by the cookie lookup in a later step (issue #10).
-#[allow(dead_code)]
 mod domain;
 mod error;
-// Used by the cookie lookup in a later step (issue #10).
-#[allow(dead_code)]
+mod platform;
 mod private_dir;
+mod reader;
 
 pub use browser::{Browser, Engine, Profile};
 pub use cookie::{Cookie, SecretValue};
 pub use error::Error;
+pub use reader::read_cookies;
 
 /// Result type used by this crate.
 pub type Result<T> = std::result::Result<T, Error>;
