@@ -115,6 +115,16 @@ mod tests {
         assert_ne!(a.path(), b.path());
     }
 
+    #[test]
+    fn a_missing_parent_folder_is_a_work_folder_error() {
+        let parent = PrivateDir::new().unwrap();
+        let missing = parent.path().join("missing");
+        assert!(matches!(
+            PrivateDir::new_in(&missing),
+            Err(Error::WorkFolder { .. })
+        ));
+    }
+
     #[cfg(unix)]
     #[test]
     fn only_the_owner_can_open_the_folder() {

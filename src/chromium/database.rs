@@ -149,56 +149,11 @@ fn query_error(error: rusqlite::Error) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chromium::test_vectors::{V24, hex, key};
+    use crate::chromium::test_vectors::{create_db, key, row};
     use crate::domain::candidate_domains;
     use crate::private_dir::PrivateDir;
 
     const NOW: i64 = 1_800_000_000;
-
-    struct Row<'a> {
-        domain: &'a str,
-        name: &'a str,
-        expires: Option<i64>,
-        value: Vec<u8>,
-    }
-
-    fn row<'a>(domain: &'a str, name: &'a str, expires: Option<i64>) -> Row<'a> {
-        Row {
-            domain,
-            name,
-            expires,
-            value: hex(V24),
-        }
-    }
-
-    fn create_db(folder: &Path, version: &str, rows: &[Row]) -> PathBuf {
-        let path = folder.join(DATABASE_FILE);
-        let conn = Connection::open(&path).unwrap();
-        conn.execute_batch(
-            "CREATE TABLE meta(key TEXT, value TEXT);
-             CREATE TABLE cookies(
-               host_key TEXT, name TEXT, path TEXT, is_secure INTEGER, is_httponly INTEGER,
-               has_expires INTEGER, expires_utc INTEGER, encrypted_value BLOB
-             );",
-        )
-        .unwrap();
-        conn.execute("INSERT INTO meta VALUES ('version', ?1)", [version])
-            .unwrap();
-        for r in rows {
-            conn.execute(
-                "INSERT INTO cookies VALUES (?1, ?2, '/', 1, 1, ?3, ?4, ?5)",
-                rusqlite::params![
-                    r.domain,
-                    r.name,
-                    r.expires.is_some(),
-                    r.expires.map_or(0, unix_to_chromium),
-                    r.value
-                ],
-            )
-            .unwrap();
-        }
-        path
-    }
 
     #[test]
     fn reads_only_unexpired_cookies_of_the_requested_site() {

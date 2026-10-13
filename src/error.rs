@@ -77,3 +77,57 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_error_has_a_message_that_names_what_failed() {
+        let path = || PathBuf::from("/tmp/Cookies");
+        let reason = || "disk full".to_owned();
+        let cases = [
+            (Error::InvalidHost("a b".into()), "a b"),
+            (Error::DatabaseNotFound(path()), "/tmp/Cookies"),
+            (
+                Error::DatabaseUnreadable {
+                    path: path(),
+                    reason: reason(),
+                },
+                "disk full",
+            ),
+            (
+                Error::DatabaseQuery("no such table".into()),
+                "no such table",
+            ),
+            (
+                Error::WorkFolder {
+                    path: path(),
+                    reason: reason(),
+                },
+                "/tmp/Cookies",
+            ),
+            (Error::UnsupportedDatabaseVersion(25), "25"),
+            (Error::KeyAccessDenied, "denied"),
+            (Error::KeyNotFound, "not found"),
+            (Error::KeyUnavailable(-1), "-1"),
+            (
+                Error::DecryptionFailed {
+                    cookie_name: "session".into(),
+                },
+                "session",
+            ),
+            (
+                Error::HostHashMismatch {
+                    cookie_name: "session".into(),
+                },
+                "another site",
+            ),
+            (Error::Unsupported("Safari".into()), "Safari"),
+        ];
+        for (error, expected) in cases {
+            let message = error.to_string();
+            assert!(message.contains(expected), "{message}");
+        }
+    }
+}
