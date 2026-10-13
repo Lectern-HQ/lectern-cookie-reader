@@ -19,21 +19,44 @@ const ERR_SEC_AUTH_FAILED: i32 = -25293;
 /// `errSecItemNotFound`: the browser never stored its key (for example never opened).
 const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
 
+/// Where a Chromium browser keeps its data on macOS, and the name of its Keychain item.
+/// Folders and names match yt-dlp's table (`yt_dlp/cookies.py`); Arc and Dia were added
+/// here, and only Dia has been checked on a real Mac so far.
 struct ChromiumBrowser {
     /// Relative to the home folder.
     user_data_dir: &'static str,
-    keychain_service: &'static str,
-    keychain_account: &'static str,
+    /// The Keychain item has the service "<name> Safe Storage" and the account "<name>".
+    keychain_name: &'static str,
 }
 
 fn chromium_browser(browser: Browser) -> ChromiumBrowser {
-    match browser {
-        Browser::Dia => ChromiumBrowser {
-            user_data_dir: "Library/Application Support/Dia/User Data",
-            keychain_service: "Dia Safe Storage",
-            keychain_account: "Dia",
-        },
+    let (user_data_dir, keychain_name) = match browser {
+        Browser::Arc => ("Library/Application Support/Arc/User Data", "Arc"),
+        Browser::Brave => (
+            "Library/Application Support/BraveSoftware/Brave-Browser",
+            "Brave",
+        ),
+        Browser::Chrome => ("Library/Application Support/Google/Chrome", "Chrome"),
+        Browser::Chromium => ("Library/Application Support/Chromium", "Chromium"),
+        Browser::Dia => ("Library/Application Support/Dia/User Data", "Dia"),
+        Browser::Edge => (
+            "Library/Application Support/Microsoft Edge",
+            "Microsoft Edge",
+        ),
+        Browser::Opera => (
+            "Library/Application Support/com.operasoftware.Opera",
+            "Opera",
+        ),
+        Browser::Vivaldi => ("Library/Application Support/Vivaldi", "Vivaldi"),
+    };
+    ChromiumBrowser {
+        user_data_dir,
+        keychain_name,
     }
+}
+
+fn keychain_service(name: &str) -> String {
+    format!("{name} Safe Storage")
 }
 
 pub(crate) fn user_data_dir(browser: Browser) -> Result<PathBuf> {
@@ -45,9 +68,9 @@ pub(crate) fn user_data_dir(browser: Browser) -> Result<PathBuf> {
 
 /// Asks the Keychain for the browser's password. macOS may show its permission dialog.
 pub(crate) fn chromium_key(browser: Browser) -> Result<Zeroizing<[u8; 16]>> {
-    let names = chromium_browser(browser);
-    let password = get_generic_password(names.keychain_service, names.keychain_account)
-        .map_err(|e| key_error(e.code()))?;
+    let name = chromium_browser(browser).keychain_name;
+    let password =
+        get_generic_password(&keychain_service(name), name).map_err(|e| key_error(e.code()))?;
     let password = Zeroizing::new(password);
     Ok(crypto::derive_key(&password))
 }
@@ -78,6 +101,27 @@ mod tests {
     #[test]
     fn other_codes_are_kept() {
         assert!(matches!(key_error(-25308), Error::KeyUnavailable(-25308)));
+    }
+
+    #[test]
+    fn dia_matches_the_keychain_item_seen_on_a_real_mac() {
+        let dia = chromium_browser(Browser::Dia);
+        assert_eq!(keychain_service(dia.keychain_name), "Dia Safe Storage");
+        assert_eq!(dia.keychain_name, "Dia");
+    }
+
+    #[test]
+    fn every_browser_has_its_own_folder_and_keychain_item() {
+        let table: Vec<_> = Browser::ALL.into_iter().map(chromium_browser).collect();
+        let folders: std::collections::HashSet<_> = table.iter().map(|b| b.user_data_dir).collect();
+        let names: std::collections::HashSet<_> = table.iter().map(|b| b.keychain_name).collect();
+        assert_eq!(folders.len(), table.len());
+        assert_eq!(names.len(), table.len());
+        assert!(
+            table
+                .iter()
+                .all(|b| b.user_data_dir.starts_with("Library/Application Support/"))
+        );
     }
 
     #[test]
