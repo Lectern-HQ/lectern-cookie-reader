@@ -246,6 +246,8 @@ version = "0.1.0"
 dependencies = [
  "aes",
  "cbc",
+ "core-foundation",
+ "core-foundation-sys",
  "pbkdf2",
  "rusqlite",
  "security-framework",
