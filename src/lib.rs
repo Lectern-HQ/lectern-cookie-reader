@@ -9,14 +9,17 @@
 //! anything over the network, or put a cookie value in a log or an error message.
 
 mod browser;
-// Used by the cookie lookup in a later step (issue #12).
+// Used by the cookie lookup in a later step (issue #10).
 #[allow(dead_code)]
 mod chromium;
 mod cookie;
-// Used by the cookie lookup in a later step (issue #12).
+// Used by the cookie lookup in a later step (issue #10).
 #[allow(dead_code)]
 mod domain;
 mod error;
+// Used by the cookie lookup in a later step (issue #10).
+#[allow(dead_code)]
+mod private_dir;
 
 pub use browser::{Browser, Engine, Profile};
 pub use cookie::{Cookie, SecretValue};
