@@ -26,6 +26,8 @@ pub enum Error {
     KeyUnavailable(i32),
     /// One cookie could not be decrypted. Only its name is given, never its value.
     DecryptionFailed { cookie_name: String },
+    /// A cookie field contains a tab or a line break, which would break the cookie file.
+    InvalidCookie { cookie_name: String },
     /// A decrypted value was stored for another site. The value is discarded.
     HostHashMismatch { cookie_name: String },
     /// This browser or operating system is not supported yet.
@@ -64,6 +66,12 @@ impl fmt::Display for Error {
             }
             Error::DecryptionFailed { cookie_name } => {
                 write!(f, "cookie {cookie_name:?} could not be decrypted")
+            }
+            Error::InvalidCookie { cookie_name } => {
+                write!(
+                    f,
+                    "cookie {cookie_name:?} contains a tab or a line break and cannot be written"
+                )
             }
             Error::HostHashMismatch { cookie_name } => {
                 write!(
@@ -116,6 +124,12 @@ mod tests {
                     cookie_name: "session".into(),
                 },
                 "session",
+            ),
+            (
+                Error::InvalidCookie {
+                    cookie_name: "session".into(),
+                },
+                "line break",
             ),
             (
                 Error::HostHashMismatch {
