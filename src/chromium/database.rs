@@ -14,11 +14,16 @@ const DATABASE_FILE: &str = "Cookies";
 /// Without them the copy could miss a login that just happened.
 const SIDECAR_SUFFIXES: [&str; 2] = ["-wal", "-journal"];
 
+/// Whether `profile_dir` holds a Chromium cookie database.
+pub(crate) fn has_database(profile_dir: &Path) -> bool {
+    profile_dir.join(DATABASE_FILE).is_file()
+}
+
 /// Copies the cookie database of a profile, with its SQLite sidecar files, into `folder`
 /// and returns the path of the copy.
 pub(crate) fn copy_database(profile_dir: &Path, folder: &Path) -> Result<PathBuf> {
     let source = profile_dir.join(DATABASE_FILE);
-    if !source.is_file() {
+    if !has_database(profile_dir) {
         return Err(Error::DatabaseNotFound(source));
     }
     copy_file(&source, &folder.join(DATABASE_FILE))?;
@@ -66,19 +71,22 @@ impl CookieDb {
         Ok(Self { conn, version })
     }
 
-    /// Whether any unexpired cookie is stored under one of `domains`. Nothing is decrypted,
-    /// so this can run before asking the operating system for the browser's key.
-    pub(crate) fn has_cookies_for(&self, domains: &[String], now_unix: i64) -> Result<bool> {
+    /// When the browser last sent an unexpired cookie stored under one of `domains`, as Unix
+    /// seconds, or `None` if there is no such cookie. Nothing is decrypted, so this can run
+    /// before asking the operating system for the browser's key.
+    pub(crate) fn last_used_for(&self, domains: &[String], now_unix: i64) -> Result<Option<i64>> {
         let sql = format!(
-            "SELECT EXISTS(SELECT 1 FROM cookies WHERE {})",
+            "SELECT MAX(last_access_utc) FROM cookies WHERE {}",
             matching_rows(domains.len())
         );
         let now = unix_to_chromium(now_unix);
-        self.conn
+        let last_access: Option<i64> = self
+            .conn
             .query_row(&sql, query_params(&now, domains).as_slice(), |row| {
                 row.get(0)
             })
-            .map_err(query_error)
+            .map_err(query_error)?;
+        Ok(last_access.map(chromium_to_unix))
     }
 
     /// Decrypts the unexpired cookies stored under one of `domains`.
@@ -149,11 +157,9 @@ fn query_error(error: rusqlite::Error) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chromium::test_vectors::{create_db, key, row};
+    use crate::chromium::test_vectors::{NOW, create_db, key, row};
     use crate::domain::candidate_domains;
     use crate::private_dir::PrivateDir;
-
-    const NOW: i64 = 1_800_000_000;
 
     #[test]
     fn reads_only_unexpired_cookies_of_the_requested_site() {
@@ -171,7 +177,7 @@ mod tests {
         let db = CookieDb::open(&path).unwrap();
         let domains = candidate_domains("www.example.com");
 
-        assert!(db.has_cookies_for(&domains, NOW).unwrap());
+        assert_eq!(db.last_used_for(&domains, NOW).unwrap(), Some(NOW - 10));
         let mut cookies = db.read(&domains, &key(), NOW).unwrap();
         cookies.sort_by(|a, b| a.name.cmp(&b.name));
         let names: Vec<_> = cookies.iter().map(|c| c.name.as_str()).collect();
@@ -187,8 +193,9 @@ mod tests {
         let path = create_db(dir.path(), "24", &[row("other.com", "x", None)]);
         let db = CookieDb::open(&path).unwrap();
         assert!(
-            !db.has_cookies_for(&candidate_domains("example.com"), NOW)
+            db.last_used_for(&candidate_domains("example.com"), NOW)
                 .unwrap()
+                .is_none()
         );
     }
 
@@ -210,7 +217,7 @@ mod tests {
         let path = create_db(dir.path(), "24", &[row("example.com", "x", None)]);
         let db = CookieDb::open(&path).unwrap();
         let hostile = vec!["x' OR '1'='1".to_owned()];
-        assert!(!db.has_cookies_for(&hostile, NOW).unwrap());
+        assert!(db.last_used_for(&hostile, NOW).unwrap().is_none());
     }
 
     #[test]
