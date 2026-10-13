@@ -11,6 +11,7 @@
 mod browser;
 mod chromium;
 mod cookie;
+mod cookie_file;
 mod domain;
 mod error;
 mod platform;
@@ -19,6 +20,7 @@ mod reader;
 
 pub use browser::{Browser, Engine, Profile};
 pub use cookie::{Cookie, SecretValue};
+pub use cookie_file::CookieFile;
 pub use error::Error;
 pub use reader::read_cookies;
 
