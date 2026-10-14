@@ -14,7 +14,7 @@ use crate::{Cookie, Error, Result};
 const DATABASE_FILE: &str = "Cookies";
 /// SQLite keeps recent changes in these files next to the database until it merges them.
 /// Without them the copy could miss a login that just happened.
-const SIDECAR_SUFFIXES: [&str; 2] = ["-wal", "-journal"];
+const SIDECAR_SUFFIXES: &[&str] = &["-wal", "-journal"];
 
 /// Whether `profile_dir` holds a Chromium cookie database.
 pub(crate) fn has_database(profile_dir: &Path) -> bool {
