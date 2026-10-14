@@ -29,19 +29,24 @@ mod chromium;
 mod clock;
 mod cookie;
 mod cookie_file;
+mod default_browser;
 mod domain;
 mod error;
 mod logins;
+mod netscape;
 mod platform;
 mod private_dir;
+mod profile;
 mod reader;
 mod suggest;
 
-pub use browser::{Browser, DefaultBrowser, Engine, Profile, default_browser};
+pub use browser::{Browser, Engine};
 pub use cookie::{Cookie, SecretValue};
 pub use cookie_file::CookieFile;
+pub use default_browser::{DefaultBrowser, default_browser};
 pub use error::Error;
 pub use logins::{Checked, Login, Scan, Skipped, find_logins};
+pub use profile::Profile;
 pub use reader::read_cookies;
 pub use suggest::{Reason, Suggestion, suggest};
 
