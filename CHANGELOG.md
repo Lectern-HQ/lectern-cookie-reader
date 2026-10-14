@@ -2,6 +2,11 @@
 
 All notable changes to this library. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/) (before 1.0, a minor version may break the API).
 
+## [Unreleased]
+
+### Changed
+- **Breaking:** browsers are entries in one catalog (`src/catalog.rs`) instead of an enum. Use `Browser::by_id("dia")` instead of `Browser::Dia`, and `Browser::all()` instead of `Browser::ALL`. `Browser::id()` gives a stable id to save a user's choice. Adding a browser is one catalog entry.
+
 ## [0.2.0] - 2026-10-14
 
 ### Added

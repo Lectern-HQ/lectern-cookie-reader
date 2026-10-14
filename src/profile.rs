@@ -78,6 +78,7 @@ pub(crate) fn profiles_in(browser: Browser, data_dir: &Path) -> Result<Vec<Profi
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::browser::tests::browser;
 
     use crate::private_dir::PrivateDir;
 
@@ -102,25 +103,25 @@ mod tests {
         make_profile(data.path(), "Profile 3", false);
         make_profile(data.path(), "Guest Profile", true);
         make_profile(data.path(), "System Profile", true);
-        let profiles = profiles_in(Browser::Dia, data.path()).unwrap();
+        let profiles = profiles_in(browser("dia"), data.path()).unwrap();
         assert_eq!(names(&profiles), ["Default", "Profile 1", "Profile 2"]);
         assert_eq!(profiles[1].path, data.path().join("Profile 1"));
-        assert!(profiles.iter().all(|p| p.browser == Browser::Dia));
+        assert!(profiles.iter().all(|p| p.browser == browser("dia")));
     }
 
     #[test]
     fn a_browser_that_is_not_installed_has_no_profiles() {
         let data = PrivateDir::new().unwrap();
         let missing = data.path().join("not installed");
-        assert!(profiles_in(Browser::Chrome, &missing).unwrap().is_empty());
-        assert!(profiles_in(Browser::Opera, &missing).unwrap().is_empty());
+        assert!(profiles_in(browser("chrome"), &missing).unwrap().is_empty());
+        assert!(profiles_in(browser("opera"), &missing).unwrap().is_empty());
     }
 
     #[test]
     fn opera_has_one_profile_in_its_data_folder() {
         let data = PrivateDir::new().unwrap();
         std::fs::write(data.path().join("Cookies"), "").unwrap();
-        let profiles = profiles_in(Browser::Opera, data.path()).unwrap();
+        let profiles = profiles_in(browser("opera"), data.path()).unwrap();
         assert_eq!(names(&profiles), ["Default"]);
         assert_eq!(profiles[0].path, data.path());
     }
@@ -132,7 +133,7 @@ mod tests {
         let file = data.path().join("not a folder");
         std::fs::write(&file, "").unwrap();
         assert!(matches!(
-            profiles_in(Browser::Dia, &file),
+            profiles_in(browser("dia"), &file),
             Err(Error::DatabaseUnreadable { .. })
         ));
     }
@@ -140,8 +141,8 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn the_default_profile_is_the_default_folder() {
-        let profile = Browser::Dia.default_profile().unwrap();
-        assert_eq!(profile.browser, Browser::Dia);
+        let profile = browser("dia").default_profile().unwrap();
+        assert_eq!(profile.browser, browser("dia"));
         assert_eq!(profile.name, "Default");
         assert!(profile.path.ends_with("Dia/User Data/Default"));
     }
@@ -149,7 +150,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn opera_uses_its_data_folder_as_the_profile() {
-        let profile = Browser::Opera.default_profile().unwrap();
+        let profile = browser("opera").default_profile().unwrap();
         assert!(profile.path.ends_with("com.operasoftware.Opera"));
     }
 
@@ -157,7 +158,7 @@ mod tests {
     #[test]
     fn other_systems_are_reported_as_unsupported() {
         assert!(matches!(
-            Browser::Dia.default_profile(),
+            browser("dia").default_profile(),
             Err(crate::Error::Unsupported(_))
         ));
     }

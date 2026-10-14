@@ -60,8 +60,7 @@ pub struct Scan {
 /// A browser or profile that cannot be read is listed in [`Scan::skipped`].
 pub fn find_logins(host: &str) -> Result<Scan> {
     let domains = candidate_domains(&normalize_host(host)?);
-    let data_dirs = Browser::ALL
-        .into_iter()
+    let data_dirs = Browser::all()
         .map(|browser| Ok((browser, platform::user_data_dir(browser)?)))
         .collect::<Result<Vec<_>>>()?;
     Ok(find_in(&data_dirs, &domains, now_unix()))
@@ -135,6 +134,7 @@ fn check(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::browser::tests::browser;
     use crate::chromium::test_vectors::{NOW, create_db, row};
 
     fn profile(dir: &PrivateDir, browser: Browser) -> Profile {
@@ -162,9 +162,9 @@ mod tests {
         );
         create_db(none.path(), "24", &[row(".other.com", "c", None)]);
         let profiles = [
-            profile(&dia, Browser::Dia),
-            profile(&chrome, Browser::Chrome),
-            profile(&none, Browser::Brave),
+            profile(&dia, browser("dia")),
+            profile(&chrome, browser("chrome")),
+            profile(&none, browser("brave")),
         ];
 
         let result = scan(&profiles, &candidate_domains("example.com"), NOW);
@@ -176,7 +176,7 @@ mod tests {
             .collect();
         assert_eq!(
             found,
-            [(Browser::Chrome, NOW - 60), (Browser::Dia, NOW - 3600)]
+            [(browser("chrome"), NOW - 60), (browser("dia"), NOW - 3600)]
         );
         assert!(result.skipped.is_empty());
     }
@@ -186,7 +186,7 @@ mod tests {
         let dir = PrivateDir::new().unwrap();
         create_db(dir.path(), "24", &[row(".example.com", "a", Some(NOW - 1))]);
         let result = scan(
-            &[profile(&dir, Browser::Dia)],
+            &[profile(&dir, browser("dia"))],
             &candidate_domains("example.com"),
             NOW,
         );
@@ -200,8 +200,8 @@ mod tests {
         create_db(newer.path(), "99", &[row(".example.com", "a", None)]);
         create_db(good.path(), "24", &[row(".example.com", "a", None)]);
         let profiles = [
-            profile(&newer, Browser::Dia),
-            profile(&good, Browser::Chrome),
+            profile(&newer, browser("dia")),
+            profile(&good, browser("chrome")),
         ];
 
         let result = scan(&profiles, &candidate_domains("example.com"), NOW);
@@ -228,17 +228,17 @@ mod tests {
         let not_a_folder = dia.path().join("Default").join("Cookies");
         let missing = dia.path().join("missing");
         let data_dirs = [
-            (Browser::Chrome, not_a_folder.clone()),
-            (Browser::Dia, dia.path().to_owned()),
-            (Browser::Brave, missing),
+            (browser("chrome"), not_a_folder.clone()),
+            (browser("dia"), dia.path().to_owned()),
+            (browser("brave"), missing),
         ];
 
         let result = find_in(&data_dirs, &candidate_domains("example.com"), NOW);
 
         assert_eq!(result.logins.len(), 1);
-        assert_eq!(result.logins[0].profile.browser, Browser::Dia);
+        assert_eq!(result.logins[0].profile.browser, browser("dia"));
         assert_eq!(result.skipped.len(), 1);
-        assert_eq!(result.skipped[0].browser, Browser::Chrome);
+        assert_eq!(result.skipped[0].browser, browser("chrome"));
         assert_eq!(result.skipped[0].path, not_a_folder);
     }
 

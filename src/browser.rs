@@ -1,5 +1,7 @@
-//! The browsers this crate knows and how each stores its cookies.
+//! A browser this crate knows, as a handle to its entry in the catalog (`catalog.rs`).
+//! Nothing here lists browsers: every browser's details are data in the catalog.
 
+use crate::catalog::BROWSERS;
 use crate::profile::{self, Profile};
 use crate::{Result, platform};
 
@@ -12,64 +14,81 @@ pub enum Engine {
     Firefox,
 }
 
-/// A browser this crate knows how to read. New browsers are added over time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum Browser {
-    /// Arc, from The Browser Company.
-    Arc,
-    /// Brave.
-    Brave,
-    /// Google Chrome.
-    Chrome,
-    /// Chromium, the open source base of Chrome.
-    Chromium,
-    /// Dia, from The Browser Company.
-    Dia,
-    /// Microsoft Edge.
-    Edge,
-    /// Opera.
-    Opera,
-    /// Vivaldi.
-    Vivaldi,
+/// Where a browser keeps its profiles inside its data folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProfileLayout {
+    /// One subfolder per profile: `Default`, `Profile 1`, `Profile 2`...
+    Folders,
+    /// The data folder itself is the only profile (Opera).
+    Single,
 }
 
-impl Browser {
-    /// Every browser this crate knows, in alphabetical order.
-    pub const ALL: [Browser; 8] = [
-        Browser::Arc,
-        Browser::Brave,
-        Browser::Chrome,
-        Browser::Chromium,
-        Browser::Dia,
-        Browser::Edge,
-        Browser::Opera,
-        Browser::Vivaldi,
-    ];
+/// Where a browser keeps its data on macOS, and the names macOS knows it by.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct MacOs {
+    /// The folder that holds the profiles, relative to the home folder.
+    pub(crate) data_dir: &'static str,
+    /// The Keychain item has the service "<name> Safe Storage" and the account "<name>".
+    pub(crate) keychain_name: &'static str,
+    /// File name of the app in `/Applications`.
+    pub(crate) app_name: &'static str,
+}
 
-    /// Name shown to the user.
+/// One browser's entry in the catalog.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Spec {
+    /// Short, stable identifier in lower case, for example `dia`.
+    pub(crate) id: &'static str,
+    /// Name shown to the user, for example `Microsoft Edge`.
+    pub(crate) name: &'static str,
+    /// How the browser stores its cookies.
+    pub(crate) engine: Engine,
+    /// Where its profiles are inside its data folder.
+    pub(crate) layout: ProfileLayout,
+    /// Its macOS details, or `None` when it does not exist on macOS.
+    pub(crate) macos: Option<MacOs>,
+}
+
+/// A browser this crate knows how to read. Get one with [`Browser::by_id`], or go through
+/// all of them with [`Browser::all`].
+#[derive(Clone, Copy)]
+pub struct Browser(&'static Spec);
+
+impl Browser {
+    /// Every browser this crate knows, in alphabetical order of id.
+    pub fn all() -> impl Iterator<Item = Browser> {
+        BROWSERS.iter().map(Browser)
+    }
+
+    /// The browser with this id (`arc`, `brave`, `chrome`, `chromium`, `dia`, `edge`,
+    /// `opera`, `vivaldi`), or `None` for one this crate does not know.
+    pub fn by_id(id: &str) -> Option<Browser> {
+        Self::all().find(|b| b.id() == id)
+    }
+
+    /// Short, stable identifier, for example `dia`. Suitable for saving a user's choice.
+    pub fn id(self) -> &'static str {
+        self.spec().id
+    }
+
+    /// Name shown to the user, for example `Microsoft Edge`.
     pub fn name(self) -> &'static str {
-        match self {
-            Browser::Arc => "Arc",
-            Browser::Brave => "Brave",
-            Browser::Chrome => "Google Chrome",
-            Browser::Chromium => "Chromium",
-            Browser::Dia => "Dia",
-            Browser::Edge => "Microsoft Edge",
-            Browser::Opera => "Opera",
-            Browser::Vivaldi => "Vivaldi",
-        }
+        self.spec().name
     }
 
     /// How the browser stores its cookies.
     pub fn engine(self) -> Engine {
-        Engine::Chromium
+        self.spec().engine
+    }
+
+    /// The browser's catalog entry.
+    pub(crate) fn spec(self) -> &'static Spec {
+        self.0
     }
 
     /// Whether the browser keeps several profiles in subfolders (`Default`, `Profile 1`).
-    /// Opera keeps its only profile directly in its data folder.
     pub(crate) fn has_profiles(self) -> bool {
-        self != Browser::Opera
+        self.spec().layout == ProfileLayout::Folders
     }
 
     /// The profiles of this browser on this computer that have a cookie database,
@@ -84,28 +103,62 @@ impl Browser {
     }
 }
 
+impl PartialEq for Browser {
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id()
+    }
+}
+
+impl Eq for Browser {}
+
+impl std::hash::Hash for Browser {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id().hash(state);
+    }
+}
+
+impl std::fmt::Debug for Browser {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Browser({})", self.id())
+    }
+}
+
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    #[test]
-    fn dia_is_a_chromium_browser() {
-        assert_eq!(Browser::Dia.name(), "Dia");
-        assert_eq!(Browser::Dia.engine(), Engine::Chromium);
+    /// A browser from the catalog, for tests.
+    pub(crate) fn browser(id: &str) -> Browser {
+        Browser::by_id(id).unwrap_or_else(|| panic!("{id} is not in the catalog"))
     }
 
     #[test]
-    fn every_browser_is_listed_once_with_its_own_name() {
-        let names: std::collections::HashSet<_> = Browser::ALL.iter().map(|b| b.name()).collect();
-        assert_eq!(names.len(), Browser::ALL.len());
+    fn a_browser_is_found_by_its_id() {
+        let dia = browser("dia");
+        assert_eq!(dia.id(), "dia");
+        assert_eq!(dia.name(), "Dia");
+        assert_eq!(dia.engine(), Engine::Chromium);
+        assert_eq!(Browser::by_id("netscape"), None);
     }
 
     #[test]
-    fn only_opera_has_no_profile_folders() {
-        let without: Vec<_> = Browser::ALL
-            .into_iter()
-            .filter(|b| !b.has_profiles())
-            .collect();
-        assert_eq!(without, [Browser::Opera]);
+    fn every_catalog_entry_is_a_browser() {
+        assert_eq!(Browser::all().count(), BROWSERS.len());
+        assert!(Browser::all().all(|b| Browser::by_id(b.id()) == Some(b)));
+    }
+
+    #[test]
+    fn browsers_compare_and_print_by_id() {
+        assert_eq!(browser("dia"), browser("dia"));
+        assert_ne!(browser("dia"), browser("arc"));
+        assert_eq!(format!("{:?}", browser("edge")), "Browser(edge)");
+        let set: std::collections::HashSet<Browser> = Browser::all().collect();
+        assert_eq!(set.len(), BROWSERS.len());
+    }
+
+    #[test]
+    fn the_profile_layout_comes_from_the_catalog() {
+        assert!(browser("chrome").has_profiles());
+        assert!(!browser("opera").has_profiles());
     }
 }
