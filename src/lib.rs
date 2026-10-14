@@ -30,7 +30,7 @@ mod platform;
 mod private_dir;
 mod reader;
 
-pub use browser::{Browser, Engine, Profile};
+pub use browser::{Browser, DefaultBrowser, Engine, Profile, default_browser};
 pub use cookie::{Cookie, SecretValue};
 pub use cookie_file::CookieFile;
 pub use error::Error;
