@@ -9,6 +9,7 @@ use rusqlite::{Connection, ToSql};
 use crate::chromium::{chromium_to_unix, crypto, unix_to_chromium};
 use crate::{Cookie, Error, Result};
 
+/// The cookie database's file name in a Chromium profile folder.
 const DATABASE_FILE: &str = "Cookies";
 /// SQLite keeps recent changes in these files next to the database until it merges them.
 /// Without them the copy could miss a login that just happened.
@@ -37,6 +38,7 @@ pub(crate) fn copy_database(profile_dir: &Path, folder: &Path) -> Result<PathBuf
     Ok(folder.join(DATABASE_FILE))
 }
 
+/// Copies one file, reporting the source path if it fails.
 fn copy_file(from: &Path, to: &Path) -> Result<()> {
     fs::copy(from, to)
         .map(|_| ())
@@ -48,7 +50,9 @@ fn copy_file(from: &Path, to: &Path) -> Result<()> {
 
 /// An opened database copy whose version this crate knows.
 pub(crate) struct CookieDb {
+    /// The open connection to the copy.
     conn: Connection,
+    /// The database version, checked when opened.
     version: i64,
 }
 
@@ -156,12 +160,14 @@ fn matching_rows(domain_count: usize) -> String {
     format!("host_key IN ({placeholders}) AND (has_expires = 0 OR expires_utc > ?1)")
 }
 
+/// The query's parameters in order: the current time as `?1`, then each domain.
 fn query_params<'a>(now: &'a i64, domains: &'a [String]) -> Vec<&'a dyn ToSql> {
     let mut params: Vec<&dyn ToSql> = vec![now];
     params.extend(domains.iter().map(|d| d as &dyn ToSql));
     params
 }
 
+/// A database error as this crate's error, with SQLite's reason.
 fn query_error(error: rusqlite::Error) -> Error {
     Error::DatabaseQuery(error.to_string())
 }

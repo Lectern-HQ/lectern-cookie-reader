@@ -31,6 +31,7 @@ pub(crate) fn default_browser() -> Option<DefaultBrowser> {
     default_app_for_https().map(|app| from_app_path(&app))
 }
 
+/// The path of the app that opens `https` links, from Launch Services.
 fn default_app_for_https() -> Option<std::path::PathBuf> {
     let link = CFString::from_static_string("https://example.com");
     // SAFETY: both functions follow Core Foundation's create rule: every non-null object

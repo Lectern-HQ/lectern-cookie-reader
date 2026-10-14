@@ -19,9 +19,13 @@ pub(crate) const MAX_DB_VERSION: i64 = 24;
 /// From this version on, each value starts with the SHA-256 hash of its domain.
 const HOST_HASH_DB_VERSION: i64 = 24;
 
+/// Every encrypted value starts with this version marker.
 const PREFIX: &[u8] = b"v10";
+/// Chromium's fixed salt for turning the password into a key.
 const SALT: &[u8] = b"saltysalt";
+/// Chromium's number of PBKDF2 rounds on macOS.
 const ITERATIONS: u32 = 1003;
+/// Chromium's fixed initialisation vector: 16 spaces.
 const IV: [u8; 16] = [b' '; 16];
 
 /// Turns the browser's "Safe Storage" password into the AES key.

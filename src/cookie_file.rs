@@ -13,7 +13,9 @@ use zeroize::Zeroizing;
 use crate::private_dir::{PrivateDir, work_folder_error};
 use crate::{Cookie, Error, Result};
 
+/// The file's name in its private folder.
 const FILE_NAME: &str = "cookies.txt";
+/// The first line of a Netscape cookie file, which readers check for.
 const HEADER: &str = "# Netscape HTTP Cookie File\n";
 
 /// A temporary `cookies.txt` that is deleted when dropped.
@@ -31,8 +33,10 @@ const HEADER: &str = "# Netscape HTTP Cookie File\n";
 /// # }
 /// ```
 pub struct CookieFile {
+    /// Where the file is.
     path: PathBuf,
     // Dropping the folder deletes the file.
+    /// The private folder holding the file; dropping it deletes both.
     _folder: PrivateDir,
 }
 
@@ -70,6 +74,7 @@ fn create_owner_only(path: &Path) -> std::io::Result<File> {
     options.open(path)
 }
 
+/// Refuses to write a cookie file where it cannot be made readable only by the user.
 #[cfg(unix)]
 fn ensure_private_files_supported() -> Result<()> {
     Ok(())
@@ -126,6 +131,7 @@ fn check_fields(cookie: &Cookie) -> Result<()> {
     Ok(())
 }
 
+/// `TRUE` or `FALSE`, as the Netscape format writes them.
 fn flag(value: bool) -> &'static str {
     if value { "TRUE" } else { "FALSE" }
 }
