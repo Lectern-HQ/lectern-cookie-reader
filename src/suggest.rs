@@ -15,9 +15,12 @@ pub enum Reason {
     RecentlyUsed,
 }
 
+/// A profile to show already selected, and why it was chosen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Suggestion {
+    /// The suggested profile.
     pub profile: Profile,
+    /// Why it was suggested.
     pub reason: Reason,
 }
 
@@ -47,6 +50,7 @@ pub fn suggest(scan: &Scan, default: Option<&DefaultBrowser>) -> Option<Suggesti
         .map(|c| suggestion(&c.profile, Reason::RecentlyUsed))
 }
 
+/// A suggestion of `profile` for `reason`.
 fn suggestion(profile: &Profile, reason: Reason) -> Suggestion {
     Suggestion {
         profile: profile.clone(),
@@ -57,6 +61,7 @@ fn suggestion(profile: &Profile, reason: Reason) -> Suggestion {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::browser::tests::browser;
     use crate::{Browser, Checked, Login};
     use std::path::PathBuf;
 
@@ -93,7 +98,7 @@ mod tests {
     fn chrome_default() -> DefaultBrowser {
         DefaultBrowser {
             name: "Google Chrome".into(),
-            browser: Some(Browser::Chrome),
+            browser: Some(browser("chrome")),
         }
     }
 
@@ -102,18 +107,18 @@ mod tests {
         let result = suggest(
             &scan(
                 vec![Login {
-                    profile: profile(Browser::Dia, "Default"),
+                    profile: profile(browser("dia"), "Default"),
                     last_used: 100,
                 }],
                 vec![
-                    checked(Browser::Dia, "Default", Some(100)),
-                    checked(Browser::Chrome, "Default", Some(900)),
+                    checked(browser("dia"), "Default", Some(100)),
+                    checked(browser("chrome"), "Default", Some(900)),
                 ],
             ),
             Some(&chrome_default()),
         )
         .unwrap();
-        assert_eq!(result.profile.browser, Browser::Dia);
+        assert_eq!(result.profile.browser, browser("dia"));
         assert_eq!(result.reason, Reason::LoggedIn);
     }
 
@@ -123,15 +128,15 @@ mod tests {
             &scan(
                 Vec::new(),
                 vec![
-                    checked(Browser::Dia, "Default", Some(900)),
-                    checked(Browser::Chrome, "Default", Some(100)),
-                    checked(Browser::Chrome, "Profile 1", Some(500)),
+                    checked(browser("dia"), "Default", Some(900)),
+                    checked(browser("chrome"), "Default", Some(100)),
+                    checked(browser("chrome"), "Profile 1", Some(500)),
                 ],
             ),
             Some(&chrome_default()),
         )
         .unwrap();
-        assert_eq!(result.profile, profile(Browser::Chrome, "Default"));
+        assert_eq!(result.profile, profile(browser("chrome"), "Default"));
         assert_eq!(result.reason, Reason::DefaultBrowser);
     }
 
@@ -141,22 +146,25 @@ mod tests {
             &scan(
                 Vec::new(),
                 vec![
-                    checked(Browser::Chrome, "Default", Some(100)),
-                    checked(Browser::Dia, "Default", Some(900)),
-                    checked(Browser::Brave, "Default", None),
+                    checked(browser("chrome"), "Default", Some(100)),
+                    checked(browser("dia"), "Default", Some(900)),
+                    checked(browser("brave"), "Default", None),
                 ],
             ),
             Some(&safari()),
         )
         .unwrap();
-        assert_eq!(result.profile.browser, Browser::Dia);
+        assert_eq!(result.profile.browser, browser("dia"));
         assert_eq!(result.reason, Reason::RecentlyUsed);
     }
 
     #[test]
     fn a_default_browser_with_no_profile_here_is_skipped() {
         let result = suggest(
-            &scan(Vec::new(), vec![checked(Browser::Dia, "Default", Some(1))]),
+            &scan(
+                Vec::new(),
+                vec![checked(browser("dia"), "Default", Some(1))],
+            ),
             Some(&chrome_default()),
         )
         .unwrap();
@@ -166,7 +174,7 @@ mod tests {
     #[test]
     fn nothing_to_suggest_without_any_used_profile() {
         assert_eq!(suggest(&scan(Vec::new(), Vec::new()), None), None);
-        let unused = scan(Vec::new(), vec![checked(Browser::Dia, "Default", None)]);
+        let unused = scan(Vec::new(), vec![checked(browser("dia"), "Default", None)]);
         assert_eq!(suggest(&unused, Some(&safari())), None);
     }
 }

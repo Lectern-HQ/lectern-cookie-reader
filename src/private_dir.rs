@@ -8,9 +8,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{Error, Result};
 
+/// How many unused names to try before giving up.
 const ATTEMPTS: u32 = 8;
 
+/// A temporary folder that only the current user can open, removed when dropped.
 pub(crate) struct PrivateDir {
+    /// Where the folder is.
     path: PathBuf,
 }
 
@@ -39,6 +42,7 @@ impl PrivateDir {
         })
     }
 
+    /// Where the folder is.
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
@@ -52,6 +56,7 @@ impl Drop for PrivateDir {
     }
 }
 
+/// An I/O error in the work folder as this crate's error.
 pub(crate) fn work_folder_error(path: &Path, error: std::io::Error) -> Error {
     Error::WorkFolder {
         path: path.to_owned(),
@@ -59,6 +64,7 @@ pub(crate) fn work_folder_error(path: &Path, error: std::io::Error) -> Error {
     }
 }
 
+/// A folder builder that creates folders readable only by the user (on Unix).
 fn builder() -> fs::DirBuilder {
     #[allow(unused_mut)]
     let mut builder = fs::DirBuilder::new();
@@ -70,6 +76,7 @@ fn builder() -> fs::DirBuilder {
     builder
 }
 
+/// A name no other folder of this crate uses: process id, time and a counter.
 fn unique_name() -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let nanos = SystemTime::now()

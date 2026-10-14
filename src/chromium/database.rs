@@ -7,8 +7,10 @@ use std::path::{Path, PathBuf};
 use rusqlite::{Connection, ToSql};
 
 use crate::chromium::{chromium_to_unix, crypto, unix_to_chromium};
+use crate::private_dir::PrivateDir;
 use crate::{Cookie, Error, Result};
 
+/// The cookie database's file name in a Chromium profile folder.
 const DATABASE_FILE: &str = "Cookies";
 /// SQLite keeps recent changes in these files next to the database until it merges them.
 /// Without them the copy could miss a login that just happened.
@@ -37,28 +39,59 @@ pub(crate) fn copy_database(profile_dir: &Path, folder: &Path) -> Result<PathBuf
     Ok(folder.join(DATABASE_FILE))
 }
 
+/// Copies one file, reporting the source path if it fails.
 fn copy_file(from: &Path, to: &Path) -> Result<()> {
     fs::copy(from, to)
         .map(|_| ())
-        .map_err(|e| Error::DatabaseUnreadable {
-            path: from.to_owned(),
-            reason: e.to_string(),
+        .map_err(|e| unreadable(from, e))
+}
+
+/// The error for a database file that could not be copied or opened.
+fn unreadable(path: &Path, reason: impl std::fmt::Display) -> Error {
+    Error::DatabaseUnreadable {
+        path: path.to_owned(),
+        reason: reason.to_string(),
+    }
+}
+
+/// A profile's cookie database, copied into a private folder and opened. Dropping it
+/// closes the database, then deletes the copy with its folder.
+pub(crate) struct ProfileCopy {
+    /// The opened copy. Declared first, so it is closed before the folder is deleted.
+    db: CookieDb,
+    /// The private folder holding the copy.
+    _folder: PrivateDir,
+}
+
+impl ProfileCopy {
+    /// Copies the cookie database of the profile in `profile_dir` and opens the copy.
+    pub(crate) fn of(profile_dir: &Path) -> Result<Self> {
+        let folder = PrivateDir::new()?;
+        let db = CookieDb::open(&copy_database(profile_dir, folder.path())?)?;
+        Ok(Self {
+            db,
+            _folder: folder,
         })
+    }
+
+    /// The opened copy.
+    pub(crate) fn db(&self) -> &CookieDb {
+        &self.db
+    }
 }
 
 /// An opened database copy whose version this crate knows.
 pub(crate) struct CookieDb {
+    /// The open connection to the copy.
     conn: Connection,
+    /// The database version, checked when opened.
     version: i64,
 }
 
 impl CookieDb {
     /// Opens a database copy and refuses versions this crate has not been checked against.
     pub(crate) fn open(path: &Path) -> Result<Self> {
-        let conn = Connection::open(path).map_err(|e| Error::DatabaseUnreadable {
-            path: path.to_owned(),
-            reason: e.to_string(),
-        })?;
+        let conn = Connection::open(path).map_err(|e| unreadable(path, e))?;
         let version: String = conn
             .query_row("SELECT value FROM meta WHERE key = 'version'", [], |row| {
                 row.get(0)
@@ -156,12 +189,14 @@ fn matching_rows(domain_count: usize) -> String {
     format!("host_key IN ({placeholders}) AND (has_expires = 0 OR expires_utc > ?1)")
 }
 
+/// The query's parameters in order: the current time as `?1`, then each domain.
 fn query_params<'a>(now: &'a i64, domains: &'a [String]) -> Vec<&'a dyn ToSql> {
     let mut params: Vec<&dyn ToSql> = vec![now];
     params.extend(domains.iter().map(|d| d as &dyn ToSql));
     params
 }
 
+/// A database error as this crate's error, with SQLite's reason.
 fn query_error(error: rusqlite::Error) -> Error {
     Error::DatabaseQuery(error.to_string())
 }

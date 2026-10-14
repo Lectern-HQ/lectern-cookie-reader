@@ -1,3 +1,5 @@
+//! The crate's error type. No error ever contains a cookie value or a key.
+
 use std::fmt;
 use std::path::PathBuf;
 
@@ -7,14 +9,26 @@ use std::path::PathBuf;
 pub enum Error {
     /// The host is empty or is not a plain host name.
     InvalidHost(String),
+    /// Not a usable `https` link; the reason only, never the link itself.
+    InvalidLink(String),
     /// The browser's cookie database was not found at this path.
     DatabaseNotFound(PathBuf),
     /// The cookie database could not be copied or read.
-    DatabaseUnreadable { path: PathBuf, reason: String },
+    DatabaseUnreadable {
+        /// The file that could not be copied or opened.
+        path: PathBuf,
+        /// The reason from the operating system or SQLite.
+        reason: String,
+    },
     /// The copied cookie database could be opened but not queried (unexpected layout).
     DatabaseQuery(String),
     /// The private temporary folder could not be created or written.
-    WorkFolder { path: PathBuf, reason: String },
+    WorkFolder {
+        /// The folder or file that could not be created or written.
+        path: PathBuf,
+        /// The reason from the operating system.
+        reason: String,
+    },
     /// The database uses a format this version does not understand. Reading it anyway
     /// could return wrong values, so the crate refuses.
     UnsupportedDatabaseVersion(i64),
@@ -25,11 +39,20 @@ pub enum Error {
     /// Reading the key failed for another reason (operating system error code).
     KeyUnavailable(i32),
     /// One cookie could not be decrypted. Only its name is given, never its value.
-    DecryptionFailed { cookie_name: String },
+    DecryptionFailed {
+        /// The cookie's name, never its value.
+        cookie_name: String,
+    },
     /// A cookie field contains a tab or a line break, which would break the cookie file.
-    InvalidCookie { cookie_name: String },
+    InvalidCookie {
+        /// The cookie's name, with tabs and line breaks escaped.
+        cookie_name: String,
+    },
     /// A decrypted value was stored for another site. The value is discarded.
-    HostHashMismatch { cookie_name: String },
+    HostHashMismatch {
+        /// The cookie's name, never its value.
+        cookie_name: String,
+    },
     /// This browser or operating system is not supported yet.
     Unsupported(String),
 }
@@ -38,6 +61,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::InvalidHost(host) => write!(f, "not a valid host name: {host:?}"),
+            Error::InvalidLink(reason) => write!(f, "not a usable lecture link: {reason}"),
             Error::DatabaseNotFound(path) => {
                 write!(f, "cookie database not found: {}", path.display())
             }
@@ -96,6 +120,7 @@ mod tests {
         let reason = || "disk full".to_owned();
         let cases = [
             (Error::InvalidHost("a b".into()), "a b"),
+            (Error::InvalidLink("only https".into()), "only https"),
             (Error::DatabaseNotFound(path()), "/tmp/Cookies"),
             (
                 Error::DatabaseUnreadable {

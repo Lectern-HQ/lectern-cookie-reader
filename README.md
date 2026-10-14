@@ -4,20 +4,20 @@ A small Rust library that reads the login cookies for **one website** from a bro
 
 It is the part of [Lectern](https://github.com/Lectern-HQ) that touches your browser data, published so anyone can check exactly what it does.
 
-Status: version 0.2.0. Reading cookies is tested with Dia on macOS; seven more Chromium browsers are listed but not tested yet. See [CHANGELOG.md](CHANGELOG.md).
+Status: version 0.3.0. Reading cookies is tested with Dia on macOS; seven more Chromium browsers are listed but not tested yet. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Usage
 
 ```toml
 [dependencies]
-lectern-cookie-reader = { git = "https://github.com/Lectern-HQ/lectern-cookie-reader", tag = "v0.2.0" }
+lectern-cookie-reader = { git = "https://github.com/Lectern-HQ/lectern-cookie-reader", tag = "v0.3.0" }
 ```
 
 ```rust
 use lectern_cookie_reader::{Browser, CookieFile, Error, read_cookies};
 
 fn download(host: &str) -> Result<(), Error> {
-    let profile = Browser::Dia.default_profile()?;
+    let profile = Browser::by_id("dia").expect("Dia is in the catalog").default_profile()?;
     let cookies = read_cookies(&profile, host)?; // macOS may ask for permission here
     if cookies.is_empty() {
         // Not logged in to this site in this profile.
@@ -30,7 +30,7 @@ fn download(host: &str) -> Result<(), Error> {
 }
 ```
 
-`host` is a host name such as `mediaserver.unige.ch`, not a link.
+`host` is a host name such as `mediaserver.unige.ch`, not a link. To get it from a lecture link, use `host_of_link(link)`, which checks the link with the same rules as the rest of the crate.
 
 To suggest which browser to use, without decrypting anything and without any permission dialog:
 

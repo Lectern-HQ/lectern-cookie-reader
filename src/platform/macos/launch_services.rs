@@ -11,7 +11,6 @@ use core_foundation_sys::base::kCFAllocatorDefault;
 use core_foundation_sys::error::CFErrorRef;
 use core_foundation_sys::url::{CFURLCreateWithString, CFURLRef};
 
-use super::chromium_browser;
 use crate::{Browser, DefaultBrowser};
 
 /// `kLSRolesViewer`: the app that opens a link for viewing.
@@ -31,6 +30,7 @@ pub(crate) fn default_browser() -> Option<DefaultBrowser> {
     default_app_for_https().map(|app| from_app_path(&app))
 }
 
+/// The path of the app that opens `https` links, from Launch Services.
 fn default_app_for_https() -> Option<std::path::PathBuf> {
     let link = CFString::from_static_string("https://example.com");
     // SAFETY: both functions follow Core Foundation's create rule: every non-null object
@@ -67,9 +67,12 @@ fn from_app_path(app: &Path) -> DefaultBrowser {
     let file_name = app.file_name().and_then(|n| n.to_str()).unwrap_or_default();
     DefaultBrowser {
         name: file_name.trim_end_matches(".app").to_owned(),
-        browser: Browser::ALL
-            .into_iter()
-            .find(|b| chromium_browser(*b).app_name == file_name),
+        browser: Browser::all().find(|b| {
+            b.spec()
+                .macos
+                .as_ref()
+                .is_some_and(|m| m.app_name == file_name)
+        }),
     }
 }
 
@@ -80,7 +83,7 @@ mod tests {
     #[test]
     fn a_known_app_is_matched_to_its_browser() {
         let found = from_app_path(Path::new("/Applications/Google Chrome.app"));
-        assert_eq!(found.browser, Some(Browser::Chrome));
+        assert_eq!(found.browser, Browser::by_id("chrome"));
         assert_eq!(found.name, "Google Chrome");
     }
 

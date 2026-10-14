@@ -7,7 +7,7 @@
 use security_framework::passwords::get_generic_password;
 use zeroize::Zeroizing;
 
-use super::chromium_browser;
+use super::macos;
 use crate::chromium::crypto;
 use crate::{Browser, Error, Result};
 
@@ -18,19 +18,21 @@ const ERR_SEC_AUTH_FAILED: i32 = -25293;
 /// `errSecItemNotFound`: the browser never stored its key (for example never opened).
 const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
 
+/// The Keychain service name of a Chromium browser's key, for example "Dia Safe Storage".
 fn keychain_service(name: &str) -> String {
     format!("{name} Safe Storage")
 }
 
 /// Asks the Keychain for the browser's password. macOS may show its permission dialog.
 pub(crate) fn chromium_key(browser: Browser) -> Result<Zeroizing<[u8; 16]>> {
-    let name = chromium_browser(browser).keychain_name;
+    let name = macos(browser)?.keychain_name;
     let password =
         get_generic_password(&keychain_service(name), name).map_err(|e| key_error(e.code()))?;
     let password = Zeroizing::new(password);
     Ok(crypto::derive_key(&password))
 }
 
+/// A Keychain error code as this crate's error: denied, not found, or other.
 fn key_error(code: i32) -> Error {
     match code {
         ERR_SEC_USER_CANCELED | ERR_SEC_AUTH_FAILED => Error::KeyAccessDenied,
@@ -61,7 +63,9 @@ mod tests {
 
     #[test]
     fn dia_matches_the_keychain_item_seen_on_a_real_mac() {
-        let name = chromium_browser(Browser::Dia).keychain_name;
+        let name = macos(crate::browser::tests::browser("dia"))
+            .unwrap()
+            .keychain_name;
         assert_eq!(keychain_service(name), "Dia Safe Storage");
         assert_eq!(name, "Dia");
     }

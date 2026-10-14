@@ -2,10 +2,9 @@
 
 use zeroize::Zeroizing;
 
-use crate::chromium::database::{self, CookieDb};
+use crate::chromium::database::ProfileCopy;
 use crate::clock::now_unix;
-use crate::domain::{candidate_domains, normalize_host};
-use crate::private_dir::PrivateDir;
+use crate::domain::domains_for;
 use crate::{Browser, Cookie, Engine, Error, Profile, Result, platform};
 
 /// Reads the unexpired cookies that a browser would send to `host`.
@@ -21,7 +20,7 @@ use crate::{Browser, Cookie, Engine, Error, Profile, Result, platform};
 /// 3. The browser's key is requested from the operating system (on macOS the Keychain,
 ///    which may show a dialog), and only the matching cookies are decrypted.
 pub fn read_cookies(profile: &Profile, host: &str) -> Result<Vec<Cookie>> {
-    let domains = candidate_domains(&normalize_host(host)?);
+    let domains = domains_for(host)?;
     match profile.browser.engine() {
         Engine::Chromium => read_chromium(profile, &domains, now_unix(), platform::chromium_key),
         Engine::Firefox => Err(Error::Unsupported(format!(
@@ -38,23 +37,25 @@ fn read_chromium(
     now_unix: i64,
     chromium_key: impl FnOnce(Browser) -> Result<Zeroizing<[u8; 16]>>,
 ) -> Result<Vec<Cookie>> {
-    let folder = PrivateDir::new()?;
-    let db = CookieDb::open(&database::copy_database(&profile.path, folder.path())?)?;
-    if db.last_used_for(domains, now_unix)?.is_none() {
+    let copy = ProfileCopy::of(&profile.path)?;
+    if copy.db().last_used_for(domains, now_unix)?.is_none() {
         return Ok(Vec::new());
     }
     let key = chromium_key(profile.browser)?;
-    db.read(domains, &key, now_unix)
+    copy.db().read(domains, &key, now_unix)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::browser::tests::browser;
     use crate::chromium::test_vectors::{NOW, create_db, key, row};
+    use crate::domain::candidate_domains;
+    use crate::private_dir::PrivateDir;
 
     fn dia_profile(dir: &PrivateDir) -> Profile {
         Profile {
-            browser: Browser::Dia,
+            browser: browser("dia"),
             name: "Test".into(),
             path: dir.path().to_owned(),
         }
@@ -75,7 +76,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(asked_for, Some(Browser::Dia));
+        assert_eq!(asked_for, Some(browser("dia")));
         assert_eq!(cookies.len(), 1);
         assert_eq!(cookies[0].value.expose(), "hello-world");
     }
