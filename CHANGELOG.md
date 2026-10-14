@@ -2,7 +2,7 @@
 
 All notable changes to this library. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/) (before 1.0, a minor version may break the API).
 
-## [Unreleased]
+## [0.3.0] - 2026-10-15
 
 ### Added
 - `host_of_link(link)`: the checked, lower-case host of an `https` link, so apps do not write their own link parsing. Its error never repeats the link.
@@ -32,5 +32,6 @@ All notable changes to this library. The format follows [Keep a Changelog](https
 - Errors that never contain a cookie value; a denied Keychain dialog is its own error.
 - Dia on macOS.
 
+[0.3.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/releases/tag/v0.1.0
