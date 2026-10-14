@@ -30,7 +30,7 @@ fn download(host: &str) -> Result<(), Error> {
 }
 ```
 
-`host` is a host name such as `mediaserver.unige.ch`, not a link.
+`host` is a host name such as `mediaserver.unige.ch`, not a link. To get it from a lecture link, use `host_of_link(link)`, which checks the link with the same rules as the rest of the crate.
 
 To suggest which browser to use, without decrypting anything and without any permission dialog:
 

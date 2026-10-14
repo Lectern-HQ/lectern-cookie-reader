@@ -45,6 +45,7 @@ pub use browser::{Browser, Engine};
 pub use cookie::{Cookie, SecretValue};
 pub use cookie_file::CookieFile;
 pub use default_browser::{DefaultBrowser, default_browser};
+pub use domain::host_of_link;
 pub use error::Error;
 pub use logins::{Checked, Login, Scan, Skipped, find_logins};
 pub use profile::Profile;

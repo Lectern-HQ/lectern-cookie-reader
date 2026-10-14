@@ -37,6 +37,30 @@ pub(crate) fn candidate_domains(host: &str) -> Vec<String> {
     candidates
 }
 
+/// The cookie domains that apply to `host`, after checking it is a plain host name.
+pub(crate) fn domains_for(host: &str) -> Result<Vec<String>> {
+    Ok(candidate_domains(&normalize_host(host)?))
+}
+
+/// The host of an `https` link, checked and in lower case, for the functions of this
+/// crate that take a host: `https://MediaServer.unige.ch/play/1?x` gives
+/// `mediaserver.unige.ch`. The error never repeats the link, which may be a signed link.
+pub fn host_of_link(link: &str) -> Result<String> {
+    let invalid = |reason: &str| Error::InvalidLink(reason.to_owned());
+    let link = link.trim();
+    let rest = link
+        .get(..8)
+        .filter(|scheme| scheme.eq_ignore_ascii_case("https://"))
+        .map(|_| &link[8..])
+        .ok_or_else(|| invalid("only https links are accepted"))?;
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    if authority.contains('@') {
+        return Err(invalid("links with a user name are not accepted"));
+    }
+    let host = authority.split(':').next().unwrap_or_default();
+    normalize_host(host).map_err(|_| invalid("the link has no valid host name"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -69,6 +93,45 @@ mod tests {
         ] {
             assert!(!candidates.contains(&other.to_owned()), "{other}");
         }
+    }
+
+    #[test]
+    fn the_host_of_an_https_link_is_checked_and_lower_case() {
+        assert_eq!(
+            host_of_link(" HTTPS://MediaServer.unige.ch:443/play/311754?sig=x ").unwrap(),
+            "mediaserver.unige.ch"
+        );
+        assert_eq!(
+            host_of_link("https://example.com#top").unwrap(),
+            "example.com"
+        );
+    }
+
+    #[test]
+    fn other_links_are_refused_without_repeating_them() {
+        for bad in [
+            "http://example.com/",
+            "example.com/play",
+            "https:///play",
+            "https://user@example.com/",
+            "https://exa mple.com/",
+            "https://",
+            "",
+        ] {
+            let err = host_of_link(bad).unwrap_err();
+            assert!(matches!(err, Error::InvalidLink(_)), "{bad}");
+        }
+        let err = host_of_link("http://cdn.example/v.mp4?sig=SECRET").unwrap_err();
+        assert!(!err.to_string().contains("SECRET"));
+    }
+
+    #[test]
+    fn domains_for_checks_the_host_first() {
+        assert_eq!(
+            domains_for("Example.com").unwrap(),
+            ["example.com", ".example.com"]
+        );
+        assert!(matches!(domains_for("a b"), Err(Error::InvalidHost(_))));
     }
 
     #[test]
