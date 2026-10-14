@@ -31,13 +31,15 @@ mod logins;
 mod platform;
 mod private_dir;
 mod reader;
+mod suggest;
 
 pub use browser::{Browser, DefaultBrowser, Engine, Profile, default_browser};
 pub use cookie::{Cookie, SecretValue};
 pub use cookie_file::CookieFile;
 pub use error::Error;
-pub use logins::{Login, Scan, Skipped, find_logins};
+pub use logins::{Checked, Login, Scan, Skipped, find_logins};
 pub use reader::read_cookies;
+pub use suggest::{Reason, Suggestion, suggest};
 
 /// Result type used by this crate.
 pub type Result<T> = std::result::Result<T, Error>;

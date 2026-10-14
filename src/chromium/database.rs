@@ -89,6 +89,18 @@ impl CookieDb {
         Ok(last_access.map(chromium_to_unix))
     }
 
+    /// When the browser last sent any cookie, for any site, as Unix seconds: a sign of how
+    /// recently the profile was used. `None` for a profile without cookies.
+    pub(crate) fn last_active(&self) -> Result<Option<i64>> {
+        let last_access: Option<i64> = self
+            .conn
+            .query_row("SELECT MAX(last_access_utc) FROM cookies", [], |row| {
+                row.get(0)
+            })
+            .map_err(query_error)?;
+        Ok(last_access.map(chromium_to_unix))
+    }
+
     /// Decrypts the unexpired cookies stored under one of `domains`.
     ///
     /// If one value cannot be decrypted, the whole read fails with that cookie's error.
@@ -185,6 +197,26 @@ mod tests {
         assert_eq!(cookies[1].value.expose(), "hello-world");
         assert_eq!(cookies[1].expires, Some(NOW + 60));
         assert_eq!(cookies[0].expires, None);
+    }
+
+    #[test]
+    fn last_activity_counts_every_site() {
+        let dir = PrivateDir::new().unwrap();
+        let path = create_db(
+            dir.path(),
+            "24",
+            &[
+                row(".example.com", "a", None).last_used(NOW - 3600),
+                row("other.com", "b", Some(NOW - 1)).last_used(NOW - 5),
+            ],
+        );
+        assert_eq!(
+            CookieDb::open(&path).unwrap().last_active().unwrap(),
+            Some(NOW - 5)
+        );
+        let empty = PrivateDir::new().unwrap();
+        let path = create_db(empty.path(), "24", &[]);
+        assert_eq!(CookieDb::open(&path).unwrap().last_active().unwrap(), None);
     }
 
     #[test]
