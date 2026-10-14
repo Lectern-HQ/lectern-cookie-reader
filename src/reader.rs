@@ -50,11 +50,12 @@ fn read_chromium(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::browser::tests::browser;
     use crate::chromium::test_vectors::{NOW, create_db, key, row};
 
     fn dia_profile(dir: &PrivateDir) -> Profile {
         Profile {
-            browser: Browser::Dia,
+            browser: browser("dia"),
             name: "Test".into(),
             path: dir.path().to_owned(),
         }
@@ -75,7 +76,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(asked_for, Some(Browser::Dia));
+        assert_eq!(asked_for, Some(browser("dia")));
         assert_eq!(cookies.len(), 1);
         assert_eq!(cookies[0].value.expose(), "hello-world");
     }

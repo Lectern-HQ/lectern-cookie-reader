@@ -17,7 +17,7 @@ lectern-cookie-reader = { git = "https://github.com/Lectern-HQ/lectern-cookie-re
 use lectern_cookie_reader::{Browser, CookieFile, Error, read_cookies};
 
 fn download(host: &str) -> Result<(), Error> {
-    let profile = Browser::Dia.default_profile()?;
+    let profile = Browser::by_id("dia").expect("Dia is in the catalog").default_profile()?;
     let cookies = read_cookies(&profile, host)?; // macOS may ask for permission here
     if cookies.is_empty() {
         // Not logged in to this site in this profile.

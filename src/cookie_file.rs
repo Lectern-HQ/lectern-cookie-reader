@@ -21,7 +21,7 @@ const FILE_NAME: &str = "cookies.txt";
 /// # fn main() -> lectern_cookie_reader::Result<()> {
 /// use lectern_cookie_reader::{Browser, CookieFile, read_cookies};
 ///
-/// let profile = Browser::Dia.default_profile()?;
+/// let profile = Browser::by_id("dia").expect("Dia is in the catalog").default_profile()?;
 /// let cookies = read_cookies(&profile, "mediaserver.unige.ch")?;
 /// let file = CookieFile::create(&cookies)?;
 /// // Run the downloader with `--cookies <file.path()>` here.

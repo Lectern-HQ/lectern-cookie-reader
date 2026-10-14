@@ -38,7 +38,7 @@ impl TestProfile {
 
     fn profile(&self) -> Profile {
         Profile {
-            browser: Browser::Dia,
+            browser: Browser::by_id("dia").unwrap(),
             name: "Test".into(),
             path: self.0.clone(),
         }

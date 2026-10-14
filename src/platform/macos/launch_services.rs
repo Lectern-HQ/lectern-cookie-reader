@@ -11,7 +11,6 @@ use core_foundation_sys::base::kCFAllocatorDefault;
 use core_foundation_sys::error::CFErrorRef;
 use core_foundation_sys::url::{CFURLCreateWithString, CFURLRef};
 
-use super::chromium_browser;
 use crate::{Browser, DefaultBrowser};
 
 /// `kLSRolesViewer`: the app that opens a link for viewing.
@@ -68,9 +67,12 @@ fn from_app_path(app: &Path) -> DefaultBrowser {
     let file_name = app.file_name().and_then(|n| n.to_str()).unwrap_or_default();
     DefaultBrowser {
         name: file_name.trim_end_matches(".app").to_owned(),
-        browser: Browser::ALL
-            .into_iter()
-            .find(|b| chromium_browser(*b).app_name == file_name),
+        browser: Browser::all().find(|b| {
+            b.spec()
+                .macos
+                .as_ref()
+                .is_some_and(|m| m.app_name == file_name)
+        }),
     }
 }
 
@@ -81,7 +83,7 @@ mod tests {
     #[test]
     fn a_known_app_is_matched_to_its_browser() {
         let found = from_app_path(Path::new("/Applications/Google Chrome.app"));
-        assert_eq!(found.browser, Some(Browser::Chrome));
+        assert_eq!(found.browser, Browser::by_id("chrome"));
         assert_eq!(found.name, "Google Chrome");
     }
 
