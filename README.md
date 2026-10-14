@@ -4,13 +4,13 @@ A small Rust library that reads the login cookies for **one website** from a bro
 
 It is the part of [Lectern](https://github.com/Lectern-HQ) that touches your browser data, published so anyone can check exactly what it does.
 
-Status: version 0.1.0, Dia on macOS. Not released yet: more Chromium browsers and finding which one is logged in.
+Status: version 0.2.0. Reading cookies is tested with Dia on macOS; seven more Chromium browsers are listed but not tested yet. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Usage
 
 ```toml
 [dependencies]
-lectern-cookie-reader = { git = "https://github.com/Lectern-HQ/lectern-cookie-reader", tag = "v0.1.0" }
+lectern-cookie-reader = { git = "https://github.com/Lectern-HQ/lectern-cookie-reader", tag = "v0.2.0" }
 ```
 
 ```rust
