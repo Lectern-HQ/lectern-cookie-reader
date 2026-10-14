@@ -28,7 +28,7 @@ impl TestProfile {
             .unwrap();
         for host_key in host_keys {
             conn.execute(
-                "INSERT INTO cookies VALUES (?1, 'session', '/', 1, 1, 0, 0, x'00')",
+                "INSERT INTO cookies VALUES (?1, 'session', '/', 1, 1, 0, 0, 0, x'00')",
                 [host_key],
             )
             .unwrap();

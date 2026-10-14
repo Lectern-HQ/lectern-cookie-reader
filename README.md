@@ -4,7 +4,7 @@ A small Rust library that reads the login cookies for **one website** from a bro
 
 It is the part of [Lectern](https://github.com/Lectern-HQ) that touches your browser data, published so anyone can check exactly what it does.
 
-Status: version 0.1.0, Dia on macOS.
+Status: version 0.1.0, Dia on macOS. Not released yet: more Chromium browsers and finding which one is logged in.
 
 ## Usage
 
@@ -31,6 +31,24 @@ fn download(host: &str) -> Result<(), Error> {
 ```
 
 `host` is a host name such as `mediaserver.unige.ch`, not a link.
+
+To find which browser is logged in, without decrypting anything and without any permission dialog:
+
+```rust
+use lectern_cookie_reader::{Error, find_logins};
+
+fn which_browser(host: &str) -> Result<(), Error> {
+    let scan = find_logins(host)?;
+    match scan.logins.first() {
+        Some(login) => println!("Using your {} login", login.profile.browser.name()),
+        None => println!("No browser is logged in to {host}"),
+    }
+    for skipped in &scan.skipped {
+        println!("Could not check {}: {}", skipped.browser.name(), skipped.error);
+    }
+    Ok(())
+}
+```
 
 ### Errors
 
