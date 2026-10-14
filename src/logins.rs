@@ -5,10 +5,9 @@
 use std::cmp::Reverse;
 use std::path::PathBuf;
 
-use crate::chromium::database::{self, CookieDb};
+use crate::chromium::database::ProfileCopy;
 use crate::clock::now_unix;
-use crate::domain::{candidate_domains, normalize_host};
-use crate::private_dir::PrivateDir;
+use crate::domain::domains_for;
 use crate::profile::profiles_in;
 use crate::{Browser, Error, Profile, Result, platform};
 
@@ -59,7 +58,7 @@ pub struct Scan {
 /// Fails only for an invalid host or an operating system this crate does not support yet.
 /// A browser or profile that cannot be read is listed in [`Scan::skipped`].
 pub fn find_logins(host: &str) -> Result<Scan> {
-    let domains = candidate_domains(&normalize_host(host)?);
+    let domains = domains_for(host)?;
     let data_dirs = Browser::all()
         .map(|browser| Ok((browser, platform::user_data_dir(browser)?)))
         .collect::<Result<Vec<_>>>()?;
@@ -126,9 +125,11 @@ fn check(
     domains: &[String],
     now_unix: i64,
 ) -> Result<(Option<i64>, Option<i64>)> {
-    let folder = PrivateDir::new()?;
-    let db = CookieDb::open(&database::copy_database(&profile.path, folder.path())?)?;
-    Ok((db.last_used_for(domains, now_unix)?, db.last_active()?))
+    let copy = ProfileCopy::of(&profile.path)?;
+    Ok((
+        copy.db().last_used_for(domains, now_unix)?,
+        copy.db().last_active()?,
+    ))
 }
 
 #[cfg(test)]
@@ -136,6 +137,8 @@ mod tests {
     use super::*;
     use crate::browser::tests::browser;
     use crate::chromium::test_vectors::{NOW, create_db, row};
+    use crate::domain::candidate_domains;
+    use crate::private_dir::PrivateDir;
 
     fn profile(dir: &PrivateDir, browser: Browser) -> Profile {
         Profile {

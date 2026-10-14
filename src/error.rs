@@ -9,6 +9,8 @@ use std::path::PathBuf;
 pub enum Error {
     /// The host is empty or is not a plain host name.
     InvalidHost(String),
+    /// Not a usable `https` link; the reason only, never the link itself.
+    InvalidLink(String),
     /// The browser's cookie database was not found at this path.
     DatabaseNotFound(PathBuf),
     /// The cookie database could not be copied or read.
@@ -59,6 +61,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::InvalidHost(host) => write!(f, "not a valid host name: {host:?}"),
+            Error::InvalidLink(reason) => write!(f, "not a usable lecture link: {reason}"),
             Error::DatabaseNotFound(path) => {
                 write!(f, "cookie database not found: {}", path.display())
             }
@@ -117,6 +120,7 @@ mod tests {
         let reason = || "disk full".to_owned();
         let cases = [
             (Error::InvalidHost("a b".into()), "a b"),
+            (Error::InvalidLink("only https".into()), "only https"),
             (Error::DatabaseNotFound(path()), "/tmp/Cookies"),
             (
                 Error::DatabaseUnreadable {

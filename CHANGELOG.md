@@ -4,6 +4,9 @@ All notable changes to this library. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+- `host_of_link(link)`: the checked, lower-case host of an `https` link, so apps do not write their own link parsing. Its error never repeats the link.
+
 ### Changed
 - **Breaking:** browsers are entries in one catalog (`src/catalog.rs`) instead of an enum. Use `Browser::by_id("dia")` instead of `Browser::Dia`, and `Browser::all()` instead of `Browser::ALL`. `Browser::id()` gives a stable id to save a user's choice. Adding a browser is one catalog entry.
 
