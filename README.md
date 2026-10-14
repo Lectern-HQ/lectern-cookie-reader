@@ -32,16 +32,19 @@ fn download(host: &str) -> Result<(), Error> {
 
 `host` is a host name such as `mediaserver.unige.ch`, not a link.
 
-To find which browser is logged in, without decrypting anything and without any permission dialog:
+To suggest which browser to use, without decrypting anything and without any permission dialog:
 
 ```rust
-use lectern_cookie_reader::{Error, find_logins};
+use lectern_cookie_reader::{Error, Reason, default_browser, find_logins, suggest};
 
 fn which_browser(host: &str) -> Result<(), Error> {
     let scan = find_logins(host)?;
-    match scan.logins.first() {
-        Some(login) => println!("Using your {} login", login.profile.browser.name()),
-        None => println!("No browser is logged in to {host}"),
+    match suggest(&scan, default_browser().as_ref()) {
+        Some(s) if s.reason == Reason::LoggedIn => {
+            println!("Using your {} login", s.profile.browser.name())
+        }
+        Some(s) => println!("No login for {host}. Try {}?", s.profile.browser.name()),
+        None => println!("No browser found"),
     }
     for skipped in &scan.skipped {
         println!("Could not check {}: {}", skipped.browser.name(), skipped.error);
@@ -49,6 +52,10 @@ fn which_browser(host: &str) -> Result<(), Error> {
     Ok(())
 }
 ```
+
+The suggestion is a profile logged in to the site (most recently used first), else the
+system's default browser, else the most recently used profile. Show it for the user to
+confirm: the default browser is often not the one used for lectures.
 
 ### Errors
 

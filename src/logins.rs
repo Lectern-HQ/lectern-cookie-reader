@@ -30,11 +30,21 @@ pub struct Skipped {
     pub error: Error,
 }
 
+/// A profile that was checked, logged in to the site or not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Checked {
+    pub profile: Profile,
+    /// When the browser last sent any cookie, for any site, as Unix seconds.
+    pub last_active: Option<i64>,
+}
+
 /// The result of [`find_logins`].
 #[derive(Debug)]
 pub struct Scan {
     /// Profiles logged in to the site, most recently used first.
     pub logins: Vec<Login>,
+    /// Every profile that could be checked, in the order checked.
+    pub checked: Vec<Checked>,
     pub skipped: Vec<Skipped>,
 }
 
@@ -75,14 +85,22 @@ fn find_in(data_dirs: &[(Browser, PathBuf)], domains: &[String], now_unix: i64) 
 
 fn scan(profiles: &[Profile], domains: &[String], now_unix: i64) -> Scan {
     let mut logins = Vec::new();
+    let mut checked = Vec::new();
     let mut skipped = Vec::new();
     for profile in profiles {
-        match last_used(profile, domains, now_unix) {
-            Ok(Some(last_used)) => logins.push(Login {
-                profile: profile.clone(),
-                last_used,
-            }),
-            Ok(None) => {}
+        match check(profile, domains, now_unix) {
+            Ok((last_used, last_active)) => {
+                if let Some(last_used) = last_used {
+                    logins.push(Login {
+                        profile: profile.clone(),
+                        last_used,
+                    });
+                }
+                checked.push(Checked {
+                    profile: profile.clone(),
+                    last_active,
+                });
+            }
             Err(error) => skipped.push(Skipped {
                 browser: profile.browser,
                 path: profile.path.clone(),
@@ -91,13 +109,22 @@ fn scan(profiles: &[Profile], domains: &[String], now_unix: i64) -> Scan {
         }
     }
     logins.sort_by_key(|login| Reverse(login.last_used));
-    Scan { logins, skipped }
+    Scan {
+        logins,
+        checked,
+        skipped,
+    }
 }
 
-fn last_used(profile: &Profile, domains: &[String], now_unix: i64) -> Result<Option<i64>> {
+/// When the profile last used the site, and when it last used any site.
+fn check(
+    profile: &Profile,
+    domains: &[String],
+    now_unix: i64,
+) -> Result<(Option<i64>, Option<i64>)> {
     let folder = PrivateDir::new()?;
     let db = CookieDb::open(&database::copy_database(&profile.path, folder.path())?)?;
-    db.last_used_for(domains, now_unix)
+    Ok((db.last_used_for(domains, now_unix)?, db.last_active()?))
 }
 
 #[cfg(test)]
