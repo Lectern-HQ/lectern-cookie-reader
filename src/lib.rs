@@ -8,6 +8,8 @@
 //! What it never does: ask for or store a password, read cookies of other sites, send
 //! anything over the network, or put a cookie value in a log or an error message.
 //!
+//! Every item has a doc comment, private ones too: `cargo clippy` fails otherwise.
+//!
 //! ```no_run
 //! # fn main() -> lectern_cookie_reader::Result<()> {
 //! use lectern_cookie_reader::{Browser, CookieFile, read_cookies};
@@ -19,6 +21,8 @@
 //! # Ok(())
 //! # }
 //! ```
+#![deny(missing_docs)]
+#![cfg_attr(not(test), deny(clippy::missing_docs_in_private_items))]
 
 mod browser;
 mod chromium;

@@ -1,3 +1,6 @@
+//! The browsers this crate knows, their profiles on this computer, and the system's
+//! default browser.
+
 use std::path::{Path, PathBuf};
 
 use crate::chromium::database;
@@ -21,13 +24,21 @@ const OTHER_PROFILE_PREFIX: &str = "Profile ";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Browser {
+    /// Arc, from The Browser Company.
     Arc,
+    /// Brave.
     Brave,
+    /// Google Chrome.
     Chrome,
+    /// Chromium, the open source base of Chrome.
     Chromium,
+    /// Dia, from The Browser Company.
     Dia,
+    /// Microsoft Edge.
     Edge,
+    /// Opera.
     Opera,
+    /// Vivaldi.
     Vivaldi,
 }
 
@@ -58,6 +69,7 @@ impl Browser {
         }
     }
 
+    /// How the browser stores its cookies.
     pub fn engine(self) -> Engine {
         Engine::Chromium
     }
@@ -104,6 +116,7 @@ pub fn default_browser() -> Option<DefaultBrowser> {
     platform::default_browser()
 }
 
+/// The profiles of `browser` in its data folder `data_dir` that have a cookie database, `Default` first. Empty if the folder does not exist.
 pub(crate) fn profiles_in(browser: Browser, data_dir: &Path) -> Result<Vec<Profile>> {
     if !browser.has_profiles() {
         let profile = Profile {
@@ -146,6 +159,7 @@ pub(crate) fn profiles_in(browser: Browser, data_dir: &Path) -> Result<Vec<Profi
 /// One profile of one browser on this computer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Profile {
+    /// The browser this profile belongs to.
     pub browser: Browser,
     /// Profile name as the browser shows it, for example `Default` or `Profile 1`.
     pub name: String,

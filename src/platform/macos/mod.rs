@@ -23,6 +23,7 @@ struct ChromiumBrowser {
     app_name: &'static str,
 }
 
+/// The table line for `browser`: its data folder, Keychain name and app name.
 fn chromium_browser(browser: Browser) -> ChromiumBrowser {
     let (user_data_dir, keychain_name, app_name) = match browser {
         Browser::Arc => (
@@ -73,6 +74,7 @@ fn chromium_browser(browser: Browser) -> ChromiumBrowser {
     }
 }
 
+/// The folder that holds `browser`'s profiles, under the user's home folder.
 pub(crate) fn user_data_dir(browser: Browser) -> Result<PathBuf> {
     let home = std::env::var_os("HOME")
         .filter(|home| !home.is_empty())

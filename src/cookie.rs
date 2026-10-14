@@ -1,3 +1,5 @@
+//! A cookie of the requested site, and its value wrapped so it is never printed.
+
 use std::fmt;
 
 use zeroize::Zeroizing;
@@ -11,6 +13,7 @@ use zeroize::Zeroizing;
 pub struct SecretValue(Zeroizing<String>);
 
 impl SecretValue {
+    /// Wraps a cookie value so it cannot be printed by accident.
     pub fn new(value: String) -> Self {
         Self(Zeroizing::new(value))
     }
@@ -20,10 +23,12 @@ impl SecretValue {
         &self.0
     }
 
+    /// The value's length in bytes.
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    /// Whether the value is empty.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -47,10 +52,15 @@ pub struct Cookie {
     /// The cookie's domain as the browser stores it: `example.com` for a host-only cookie,
     /// `.example.com` for a cookie that also applies to subdomains.
     pub domain: String,
+    /// The cookie's name, for example `mediaserver_session`.
     pub name: String,
+    /// The cookie's value, which never appears in `Debug` or `Display`.
     pub value: SecretValue,
+    /// The path on the site the cookie is sent for, usually `/`.
     pub path: String,
+    /// Whether the cookie is sent over https only.
     pub secure: bool,
+    /// Whether the browser hides the cookie from the site's scripts.
     pub http_only: bool,
     /// Expiry as Unix seconds, or `None` for a session cookie.
     pub expires: Option<i64>,

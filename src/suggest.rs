@@ -15,9 +15,12 @@ pub enum Reason {
     RecentlyUsed,
 }
 
+/// A profile to show already selected, and why it was chosen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Suggestion {
+    /// The suggested profile.
     pub profile: Profile,
+    /// Why it was suggested.
     pub reason: Reason,
 }
 
@@ -47,6 +50,7 @@ pub fn suggest(scan: &Scan, default: Option<&DefaultBrowser>) -> Option<Suggesti
         .map(|c| suggestion(&c.profile, Reason::RecentlyUsed))
 }
 
+/// A suggestion of `profile` for `reason`.
 fn suggestion(profile: &Profile, reason: Reason) -> Suggestion {
     Suggestion {
         profile: profile.clone(),

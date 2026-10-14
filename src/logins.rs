@@ -15,6 +15,7 @@ use crate::{Browser, Error, Profile, Result, platform};
 /// A profile with an unexpired cookie for the site.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Login {
+    /// The profile that has a login for the site.
     pub profile: Profile,
     /// When the browser last sent one of the site's cookies, as Unix seconds.
     pub last_used: i64,
@@ -23,6 +24,7 @@ pub struct Login {
 /// A browser or profile that could not be checked. The others are still checked.
 #[derive(Debug)]
 pub struct Skipped {
+    /// The browser that was being checked.
     pub browser: Browser,
     /// The browser's data folder, or the profile's folder.
     pub path: PathBuf,
@@ -33,6 +35,7 @@ pub struct Skipped {
 /// A profile that was checked, logged in to the site or not.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Checked {
+    /// The profile that was checked.
     pub profile: Profile,
     /// When the browser last sent any cookie, for any site, as Unix seconds.
     pub last_active: Option<i64>,
@@ -45,6 +48,7 @@ pub struct Scan {
     pub logins: Vec<Login>,
     /// Every profile that could be checked, in the order checked.
     pub checked: Vec<Checked>,
+    /// Browsers and profiles that could not be checked, with the reason.
     pub skipped: Vec<Skipped>,
 }
 
@@ -83,6 +87,7 @@ fn find_in(data_dirs: &[(Browser, PathBuf)], domains: &[String], now_unix: i64) 
     result
 }
 
+/// Checks each profile: whether it has a login for the site and when it was last used.
 fn scan(profiles: &[Profile], domains: &[String], now_unix: i64) -> Scan {
     let mut logins = Vec::new();
     let mut checked = Vec::new();
