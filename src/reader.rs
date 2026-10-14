@@ -1,10 +1,9 @@
 //! The public lookup: the cookies of one website in one browser profile.
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use zeroize::Zeroizing;
 
 use crate::chromium::database::{self, CookieDb};
+use crate::clock::now_unix;
 use crate::domain::{candidate_domains, normalize_host};
 use crate::private_dir::PrivateDir;
 use crate::{Browser, Cookie, Engine, Error, Profile, Result, platform};
@@ -41,25 +40,17 @@ fn read_chromium(
 ) -> Result<Vec<Cookie>> {
     let folder = PrivateDir::new()?;
     let db = CookieDb::open(&database::copy_database(&profile.path, folder.path())?)?;
-    if !db.has_cookies_for(domains, now_unix)? {
+    if db.last_used_for(domains, now_unix)?.is_none() {
         return Ok(Vec::new());
     }
     let key = chromium_key(profile.browser)?;
     db.read(domains, &key, now_unix)
 }
 
-fn now_unix() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_secs() as i64)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chromium::test_vectors::{create_db, key, row};
-
-    const NOW: i64 = 1_800_000_000;
+    use crate::chromium::test_vectors::{NOW, create_db, key, row};
 
     fn dia_profile(dir: &PrivateDir) -> Profile {
         Profile {
@@ -115,10 +106,5 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, Error::KeyAccessDenied));
-    }
-
-    #[test]
-    fn the_current_time_is_after_2020() {
-        assert!(now_unix() > 1_577_836_800);
     }
 }

@@ -4,13 +4,13 @@ A small Rust library that reads the login cookies for **one website** from a bro
 
 It is the part of [Lectern](https://github.com/Lectern-HQ) that touches your browser data, published so anyone can check exactly what it does.
 
-Status: version 0.1.0, Dia on macOS.
+Status: version 0.2.0. Reading cookies is tested with Dia on macOS; seven more Chromium browsers are listed but not tested yet. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Usage
 
 ```toml
 [dependencies]
-lectern-cookie-reader = { git = "https://github.com/Lectern-HQ/lectern-cookie-reader", tag = "v0.1.0" }
+lectern-cookie-reader = { git = "https://github.com/Lectern-HQ/lectern-cookie-reader", tag = "v0.2.0" }
 ```
 
 ```rust
@@ -31,6 +31,31 @@ fn download(host: &str) -> Result<(), Error> {
 ```
 
 `host` is a host name such as `mediaserver.unige.ch`, not a link.
+
+To suggest which browser to use, without decrypting anything and without any permission dialog:
+
+```rust
+use lectern_cookie_reader::{Error, Reason, default_browser, find_logins, suggest};
+
+fn which_browser(host: &str) -> Result<(), Error> {
+    let scan = find_logins(host)?;
+    match suggest(&scan, default_browser().as_ref()) {
+        Some(s) if s.reason == Reason::LoggedIn => {
+            println!("Using your {} login", s.profile.browser.name())
+        }
+        Some(s) => println!("No login for {host}. Try {}?", s.profile.browser.name()),
+        None => println!("No browser found"),
+    }
+    for skipped in &scan.skipped {
+        println!("Could not check {}: {}", skipped.browser.name(), skipped.error);
+    }
+    Ok(())
+}
+```
+
+The suggestion is a profile logged in to the site (most recently used first), else the
+system's default browser, else the most recently used profile. Show it for the user to
+confirm: the default browser is often not the one used for lectures.
 
 ### Errors
 

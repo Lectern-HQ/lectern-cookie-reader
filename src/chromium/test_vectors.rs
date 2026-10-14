@@ -32,16 +32,29 @@ pub(crate) struct Row<'a> {
     domain: &'a str,
     name: &'a str,
     expires: Option<i64>,
+    last_used: i64,
     value: Vec<u8>,
 }
 
-/// A cookie whose value is the `V24` vector, encrypted for `.example.com`.
+/// Fixed "now" for tests that read generated databases.
+pub(crate) const NOW: i64 = 1_800_000_000;
+
+/// A cookie whose value is the `V24` vector, encrypted for `.example.com`, last sent to
+/// the site 10 seconds before `NOW`.
 pub(crate) fn row<'a>(domain: &'a str, name: &'a str, expires: Option<i64>) -> Row<'a> {
     Row {
         domain,
         name,
         expires,
+        last_used: NOW - 10,
         value: hex(V24),
+    }
+}
+
+impl Row<'_> {
+    pub(crate) fn last_used(mut self, unix_secs: i64) -> Self {
+        self.last_used = unix_secs;
+        self
     }
 }
 
@@ -54,12 +67,13 @@ pub(crate) fn create_db(folder: &Path, version: &str, rows: &[Row]) -> PathBuf {
         .unwrap();
     for r in rows {
         conn.execute(
-            "INSERT INTO cookies VALUES (?1, ?2, '/', 1, 1, ?3, ?4, ?5)",
+            "INSERT INTO cookies VALUES (?1, ?2, '/', 1, 1, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 r.domain,
                 r.name,
                 r.expires.is_some(),
                 r.expires.map_or(0, unix_to_chromium),
+                unix_to_chromium(r.last_used),
                 r.value
             ],
         )

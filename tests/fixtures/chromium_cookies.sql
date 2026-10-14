@@ -2,5 +2,5 @@
 CREATE TABLE meta(key TEXT, value TEXT);
 CREATE TABLE cookies(
   host_key TEXT, name TEXT, path TEXT, is_secure INTEGER, is_httponly INTEGER,
-  has_expires INTEGER, expires_utc INTEGER, encrypted_value BLOB
+  has_expires INTEGER, expires_utc INTEGER, last_access_utc INTEGER, encrypted_value BLOB
 );

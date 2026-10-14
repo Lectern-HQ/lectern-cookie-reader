@@ -242,10 +242,12 @@ dependencies = [
 
 [[package]]
 name = "lectern-cookie-reader"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aes",
  "cbc",
+ "core-foundation",
+ "core-foundation-sys",
  "pbkdf2",
  "rusqlite",
  "security-framework",
