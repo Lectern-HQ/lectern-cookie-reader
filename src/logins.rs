@@ -5,11 +5,11 @@
 use std::cmp::Reverse;
 use std::path::PathBuf;
 
-use crate::browser::profiles_in;
 use crate::chromium::database::{self, CookieDb};
 use crate::clock::now_unix;
 use crate::domain::{candidate_domains, normalize_host};
 use crate::private_dir::PrivateDir;
+use crate::profile::profiles_in;
 use crate::{Browser, Error, Profile, Result, platform};
 
 /// A profile with an unexpired cookie for the site.
