@@ -11,10 +11,18 @@ use crate::{Cookie, Error, Result};
 
 /// The cookie database's file name in a Chromium profile folder.
 const DATABASE_FILE: &str = "Cookies";
+/// Since Chrome 96 on Windows the database is in this subfolder of the profile.
+const NETWORK_FOLDER: &str = "Network";
 
-/// The cookie database of the Chromium profile in `profile_dir`.
+/// The cookie database of the Chromium profile in `profile_dir`: `Network\Cookies` where
+/// it exists (Windows), else `Cookies`.
 fn database_path(profile_dir: &Path) -> PathBuf {
-    profile_dir.join(DATABASE_FILE)
+    let network = profile_dir.join(NETWORK_FOLDER).join(DATABASE_FILE);
+    if network.is_file() {
+        network
+    } else {
+        profile_dir.join(DATABASE_FILE)
+    }
 }
 
 /// Whether `profile_dir` holds a Chromium cookie database.
@@ -237,6 +245,28 @@ mod tests {
         let db = CookieDb::open(&path).unwrap();
         let hostile = vec!["x' OR '1'='1".to_owned()];
         assert!(db.last_used_for(&hostile, NOW).unwrap().is_none());
+    }
+
+    #[test]
+    fn the_network_folder_is_preferred() {
+        let profile = PrivateDir::new().unwrap();
+        assert!(!has_database(profile.path()));
+        assert_eq!(
+            database_path(profile.path()),
+            profile.path().join("Cookies")
+        );
+        let network = profile.path().join("Network");
+        std::fs::create_dir(&network).unwrap();
+        create_db(&network, "24", &[row(".example.com", "a", None)]);
+        assert!(has_database(profile.path()));
+        assert_eq!(database_path(profile.path()), network.join("Cookies"));
+        let copy = ProfileCopy::of(profile.path()).unwrap();
+        assert!(
+            copy.db()
+                .last_used_for(&candidate_domains("example.com"), NOW)
+                .unwrap()
+                .is_some()
+        );
     }
 
     #[test]
