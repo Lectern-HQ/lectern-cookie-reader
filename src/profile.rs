@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::browser::ProfileLayout;
 use crate::engine_store::has_database;
 use crate::firefox::profiles_ini::{self, IniProfile};
-use crate::{Browser, Error, Result};
+use crate::{Browser, Error, Result, platform};
 
 /// Folder and display name of the first profile in Chromium browsers.
 const DEFAULT_PROFILE: &str = "Default";
@@ -47,8 +47,12 @@ pub(crate) fn default_profile(browser: Browser, data_dir: &Path) -> Result<Profi
 }
 
 /// The profiles of `browser` in its data folder `data_dir` that have a cookie database,
-/// the default profile first. Empty if the folder does not exist.
+/// the default profile first. Empty if the folder does not exist. A folder the system
+/// protects is not read: its default profile is returned unchecked.
 pub(crate) fn profiles_in(browser: Browser, data_dir: &Path) -> Result<Vec<Profile>> {
+    if platform::is_protected(browser) {
+        return Ok(vec![default_profile(browser, data_dir)?]);
+    }
     let found: Vec<(String, PathBuf)> = match browser.layout() {
         ProfileLayout::Single => vec![(DEFAULT_PROFILE.to_owned(), data_dir.to_owned())],
         ProfileLayout::Folders => profile_folders(data_dir)?,
@@ -231,6 +235,15 @@ mod tests {
         assert_eq!(profile.browser, browser("dia"));
         assert_eq!(profile.name, "Default");
         assert!(profile.path.ends_with("Dia/User Data/Default"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn safaris_protected_folder_is_never_read() {
+        let missing = PrivateDir::new().unwrap().path().join("not readable");
+        let profiles = profiles_in(browser("safari"), &missing).unwrap();
+        assert_eq!(names(&profiles), ["Default"]);
+        assert_eq!(profiles[0].path, missing);
     }
 
     #[cfg(target_os = "macos")]

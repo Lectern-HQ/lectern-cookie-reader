@@ -61,8 +61,8 @@ fn default_app_for_https() -> Option<std::path::PathBuf> {
     }
 }
 
-/// `/Applications/Dia.app` gives Dia; an app this crate cannot read, such as Safari,
-/// keeps its name with no [`Browser`].
+/// `/Applications/Dia.app` gives Dia; an app this crate cannot read keeps its name with
+/// no [`Browser`].
 fn from_app_path(app: &Path) -> DefaultBrowser {
     let file_name = app.file_name().and_then(|n| n.to_str()).unwrap_or_default();
     DefaultBrowser {
@@ -88,10 +88,17 @@ mod tests {
     }
 
     #[test]
-    fn safari_keeps_its_name_without_a_browser() {
+    fn safari_is_matched_to_its_browser() {
         let found = from_app_path(Path::new("/Applications/Safari.app"));
-        assert_eq!(found.browser, None);
+        assert_eq!(found.browser, Browser::by_id("safari"));
         assert_eq!(found.name, "Safari");
+    }
+
+    #[test]
+    fn an_unknown_app_keeps_its_name_without_a_browser() {
+        let found = from_app_path(Path::new("/Applications/Orion.app"));
+        assert_eq!(found.browser, None);
+        assert_eq!(found.name, "Orion");
     }
 
     #[test]

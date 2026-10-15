@@ -5,8 +5,8 @@ use zeroize::Zeroizing;
 use crate::chromium;
 use crate::clock::now_unix;
 use crate::domain::domains_for;
-use crate::firefox;
 use crate::{Browser, Cookie, Engine, Profile, Result, platform};
+use crate::{firefox, safari};
 
 /// Reads the unexpired cookies that a browser would send to `host`.
 ///
@@ -20,13 +20,18 @@ use crate::{Browser, Cookie, Engine, Profile, Result, platform};
 ///    logged in to.
 /// 3. For Chromium browsers, the browser's key is requested from the operating system (on
 ///    macOS the Keychain, which may show a dialog), and only the matching cookies are
-///    decrypted. The Firefox family stores values without encryption, so there is no key
-///    and no dialog.
+///    decrypted. The Firefox family and Safari store values without encryption, so there
+///    is no key and no dialog.
+///
+/// Safari's cookie file is protected by macOS and read directly, not copied. For Safari,
+/// `profile.path` is the folder of the `Cookies.binarycookies` file the user allowed this
+/// app to read; without that permission the error is [`crate::Error::PermissionNeeded`].
 pub fn read_cookies(profile: &Profile, host: &str) -> Result<Vec<Cookie>> {
     let domains = domains_for(host)?;
     match profile.browser.engine() {
         Engine::Chromium => read_chromium(profile, &domains, now_unix(), platform::chromium_key),
         Engine::Firefox => read_firefox(profile, &domains, now_unix()),
+        Engine::Safari => read_safari(profile, &domains, now_unix()),
     }
 }
 
@@ -50,6 +55,12 @@ fn read_firefox(profile: &Profile, domains: &[String], now_unix: i64) -> Result<
     firefox::database::ProfileCopy::of(&profile.path)?
         .db()
         .read(domains, now_unix)
+}
+
+/// Safari values are stored without encryption, but macOS protects the file: without the
+/// user's permission this is [`crate::Error::PermissionNeeded`].
+fn read_safari(profile: &Profile, domains: &[String], now_unix: i64) -> Result<Vec<Cookie>> {
+    safari::database::CookieFileData::of(&profile.path)?.read(domains, now_unix)
 }
 
 #[cfg(test)]
@@ -118,6 +129,22 @@ mod tests {
             path: dir.path().to_owned(),
         };
         let cookies = read_firefox(&profile, &candidate_domains("example.com"), NOW).unwrap();
+        assert_eq!(cookies.len(), 1);
+        assert_eq!(cookies[0].value.expose(), "value-of-session");
+    }
+
+    #[test]
+    fn safari_values_are_read_without_a_key() {
+        use crate::safari::test_data::{Generated, file, page};
+        let dir = PrivateDir::new().unwrap();
+        let data = file(&[page(&[Generated::new(".example.com", "session", NOW + 60)])]);
+        std::fs::write(dir.path().join("Cookies.binarycookies"), data).unwrap();
+        let profile = Profile {
+            browser: browser("safari"),
+            name: "Default".into(),
+            path: dir.path().to_owned(),
+        };
+        let cookies = read_safari(&profile, &candidate_domains("example.com"), NOW).unwrap();
         assert_eq!(cookies.len(), 1);
         assert_eq!(cookies[0].value.expose(), "value-of-session");
     }
