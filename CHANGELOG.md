@@ -2,6 +2,11 @@
 
 All notable changes to this library. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/) (before 1.0, a minor version may break the API).
 
+## [Unreleased]
+
+### Added
+- The Firefox family on macOS: Firefox, Floorp, LibreWolf, Waterfox and Zen in the catalog. Profiles are found through `profiles.ini`, and `read_cookies`, `find_logins` and `suggest` work as for Chromium browsers. Values are stored without encryption, so there is no permission dialog. Only cookies of normal tabs are read, not those of containers or partitioned third-party cookies. Database schema versions 12 to 16 are accepted. Not tested on a real Mac yet.
+
 ## [0.3.0] - 2026-10-15
 
 ### Added
@@ -32,6 +37,7 @@ All notable changes to this library. The format follows [Keep a Changelog](https
 - Errors that never contain a cookie value; a denied Keychain dialog is its own error.
 - Dia on macOS.
 
+[Unreleased]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/releases/tag/v0.1.0
