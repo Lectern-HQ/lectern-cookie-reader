@@ -8,7 +8,7 @@ use security_framework::passwords::get_generic_password;
 use zeroize::Zeroizing;
 
 use super::macos;
-use crate::chromium::crypto;
+use crate::chromium::crypto::{self, ChromiumKey};
 use crate::{Browser, Error, Result};
 
 /// `errSecUserCanceled`: the user clicked "Deny" in the Keychain dialog.
@@ -24,7 +24,7 @@ fn keychain_service(name: &str) -> String {
 }
 
 /// Asks the Keychain for the browser's password. macOS may show its permission dialog.
-pub(crate) fn chromium_key(browser: Browser) -> Result<Zeroizing<[u8; 16]>> {
+pub(crate) fn chromium_key(browser: Browser) -> Result<ChromiumKey> {
     let name = macos(browser)?
         .keychain_name
         .ok_or_else(|| Error::Unsupported(format!("a Keychain key for {}", browser.name())))?;

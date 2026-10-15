@@ -2,8 +2,7 @@
 
 use std::path::PathBuf;
 
-use zeroize::Zeroizing;
-
+use crate::chromium::crypto::ChromiumKey;
 use crate::{Browser, DefaultBrowser, Error, Result};
 
 /// Always fails: profile folders are not known on this system yet.
@@ -12,7 +11,7 @@ pub(crate) fn user_data_dir(browser: Browser) -> Result<PathBuf> {
 }
 
 /// Always fails: the browser's key cannot be read on this system yet.
-pub(crate) fn chromium_key(browser: Browser) -> Result<Zeroizing<[u8; 16]>> {
+pub(crate) fn chromium_key(browser: Browser) -> Result<ChromiumKey> {
     Err(unsupported(browser))
 }
 
