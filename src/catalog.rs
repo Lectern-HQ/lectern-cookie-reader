@@ -3,7 +3,8 @@
 //!
 //! Chromium folders and Keychain names on macOS follow yt-dlp's table (`yt_dlp/cookies.py`);
 //! Arc and Dia were added here. The Firefox family's folders are each browser's
-//! `profiles.ini` folder. Only Dia has been tested on a real Mac so far (issues #54, #6).
+//! `profiles.ini` folder. Safari's is the folder of its cookie file in its container,
+//! which macOS protects. Only Dia has been tested on a real Mac so far (issues #54, #6).
 
 use crate::browser::{Engine, MacOs, ProfileLayout, Spec};
 
@@ -18,6 +19,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/Arc/User Data",
             keychain_name: Some("Arc"),
             app_name: "Arc.app",
+            protected: false,
         }),
     },
     Spec {
@@ -29,6 +31,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/BraveSoftware/Brave-Browser",
             keychain_name: Some("Brave"),
             app_name: "Brave Browser.app",
+            protected: false,
         }),
     },
     Spec {
@@ -40,6 +43,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/Google/Chrome",
             keychain_name: Some("Chrome"),
             app_name: "Google Chrome.app",
+            protected: false,
         }),
     },
     Spec {
@@ -51,6 +55,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/Chromium",
             keychain_name: Some("Chromium"),
             app_name: "Chromium.app",
+            protected: false,
         }),
     },
     Spec {
@@ -62,6 +67,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/Dia/User Data",
             keychain_name: Some("Dia"),
             app_name: "Dia.app",
+            protected: false,
         }),
     },
     Spec {
@@ -73,6 +79,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/Microsoft Edge",
             keychain_name: Some("Microsoft Edge"),
             app_name: "Microsoft Edge.app",
+            protected: false,
         }),
     },
     Spec {
@@ -84,6 +91,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/Firefox",
             keychain_name: None,
             app_name: "Firefox.app",
+            protected: false,
         }),
     },
     Spec {
@@ -95,6 +103,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/Floorp",
             keychain_name: None,
             app_name: "Floorp.app",
+            protected: false,
         }),
     },
     Spec {
@@ -106,6 +115,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/librewolf",
             keychain_name: None,
             app_name: "LibreWolf.app",
+            protected: false,
         }),
     },
     Spec {
@@ -117,6 +127,19 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/com.operasoftware.Opera",
             keychain_name: Some("Opera"),
             app_name: "Opera.app",
+            protected: false,
+        }),
+    },
+    Spec {
+        id: "safari",
+        name: "Safari",
+        engine: Engine::Safari,
+        layout: ProfileLayout::Single,
+        macos: Some(MacOs {
+            data_dir: "Library/Containers/com.apple.Safari/Data/Library/Cookies",
+            keychain_name: None,
+            app_name: "Safari.app",
+            protected: true,
         }),
     },
     Spec {
@@ -128,6 +151,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/Vivaldi",
             keychain_name: Some("Vivaldi"),
             app_name: "Vivaldi.app",
+            protected: false,
         }),
     },
     Spec {
@@ -139,6 +163,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/Waterfox",
             keychain_name: None,
             app_name: "Waterfox.app",
+            protected: false,
         }),
     },
     Spec {
@@ -150,6 +175,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
             data_dir: "Library/Application Support/zen",
             keychain_name: None,
             app_name: "Zen.app",
+            protected: false,
         }),
     },
 ];
@@ -202,9 +228,11 @@ mod tests {
                 spec.id
             );
             if let Some(mac) = &spec.macos {
-                assert!(
-                    mac.data_dir.starts_with("Library/Application Support/"),
-                    "{}",
+                assert!(mac.data_dir.starts_with("Library/"), "{}", spec.id);
+                assert_eq!(
+                    mac.protected,
+                    spec.engine == Engine::Safari,
+                    "{}: only Safari's folder is protected",
                     spec.id
                 );
                 assert!(mac.app_name.ends_with(".app"), "{}", spec.id);

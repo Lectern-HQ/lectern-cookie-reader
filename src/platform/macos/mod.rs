@@ -29,6 +29,12 @@ pub(crate) fn user_data_dir(browser: Browser) -> Result<PathBuf> {
     Ok(PathBuf::from(home).join(macos(browser)?.data_dir))
 }
 
+/// Whether macOS protects `browser`'s data folder (Safari's container), so that reading
+/// it needs the user's permission.
+pub(crate) fn is_protected(browser: Browser) -> bool {
+    macos(browser).is_ok_and(|m| m.protected)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -38,6 +44,13 @@ mod tests {
     fn dia_profiles_are_under_application_support() {
         let dir = user_data_dir(browser("dia")).unwrap();
         assert!(dir.ends_with("Library/Application Support/Dia/User Data"));
+    }
+
+    #[test]
+    fn only_safaris_folder_is_protected() {
+        assert!(is_protected(browser("safari")));
+        assert!(!is_protected(browser("dia")));
+        assert!(!is_protected(browser("firefox")));
     }
 
     #[test]

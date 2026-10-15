@@ -34,6 +34,9 @@ pub enum Error {
     UnsupportedDatabaseVersion(i64),
     /// The user said no to the operating system's permission dialog.
     KeyAccessDenied,
+    /// The operating system protects this file, and the user has not allowed this app to
+    /// read it yet (Safari's cookie file on macOS).
+    PermissionNeeded(PathBuf),
     /// The browser's key was not found (for example the browser was never opened).
     KeyNotFound,
     /// Reading the key failed for another reason (operating system error code).
@@ -84,6 +87,11 @@ impl fmt::Display for Error {
                 write!(f, "cookie database version {v} is not supported yet")
             }
             Error::KeyAccessDenied => write!(f, "access to the browser's key was denied"),
+            Error::PermissionNeeded(path) => write!(
+                f,
+                "the system protects {}; allow this app to read it first",
+                path.display()
+            ),
             Error::KeyNotFound => write!(f, "the browser's key was not found"),
             Error::KeyUnavailable(code) => {
                 write!(f, "the browser's key is not available (error {code})")
@@ -142,6 +150,7 @@ mod tests {
             ),
             (Error::UnsupportedDatabaseVersion(25), "25"),
             (Error::KeyAccessDenied, "denied"),
+            (Error::PermissionNeeded(path()), "/tmp/Cookies"),
             (Error::KeyNotFound, "not found"),
             (Error::KeyUnavailable(-1), "-1"),
             (
