@@ -28,7 +28,14 @@ security-framework = "3.7"
 aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
 base64 = "0.23"
 serde_json = "1"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Cryptography",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Threading",
+] }
 
 # The decryption code of both systems runs in the tests on both, so the tests on macOS
 # measure the Windows code too.

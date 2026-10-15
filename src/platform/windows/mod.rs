@@ -3,6 +3,7 @@
 //! is supported.
 
 mod dpapi;
+mod owner_only;
 
 use std::path::PathBuf;
 
@@ -12,6 +13,8 @@ use crate::browser::{AppData, Windows};
 use crate::chromium::crypto::ChromiumKey;
 use crate::chromium::local_state;
 use crate::{Browser, DefaultBrowser, Error, Result};
+
+pub(crate) use owner_only::create_owner_only_dir;
 
 /// The browser's Windows details, or an error if it is not read on Windows.
 fn windows(browser: Browser) -> Result<&'static Windows> {
