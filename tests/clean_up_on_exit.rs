@@ -9,6 +9,9 @@ use lectern_cookie_reader::{CookieFile, clean_up_on_signals, remove_work_folders
 /// The environment variable that tells [`child`] which case to run.
 const CASE: &str = "LECTERN_COOKIE_READER_CHILD_CASE";
 
+/// What [`child`] prints before the path of its work folder.
+const FOLDER_MARK: &str = "FOLDER=";
+
 /// Runs only in a child started by a test below; does nothing otherwise.
 #[test]
 fn child() {
@@ -26,7 +29,7 @@ fn child() {
     }
     clean_up_on_signals().unwrap();
     clean_up_on_signals().unwrap();
-    println!("FOLDER={}", folder.display());
+    println!("{FOLDER_MARK}{}", folder.display());
     std::thread::sleep(std::time::Duration::from_secs(60));
 }
 
@@ -59,7 +62,7 @@ fn a_termination_signal_removes_the_folders_and_still_ends_the_process() {
     let folder = lines
         .map_while(Result::ok)
         .find_map(|line| {
-            line.split_once("FOLDER=")
+            line.split_once(FOLDER_MARK)
                 .map(|(_, path)| PathBuf::from(path))
         })
         .unwrap();

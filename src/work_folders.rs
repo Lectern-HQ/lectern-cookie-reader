@@ -2,9 +2,10 @@
 //! even when the values that own them are never dropped: a quit through `process::exit`,
 //! or a termination signal (see [`crate::clean_up_on_signals`]).
 
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
+
+use crate::private_dir::remove_folders;
 
 /// The work folders of this process.
 pub(crate) static LIVE: Registry = Registry::new();
@@ -58,10 +59,7 @@ impl Registry {
     /// The folders stay on the list until their owners are dropped.
     fn remove_all(&self) -> usize {
         let paths = self.paths().clone();
-        paths
-            .iter()
-            .filter(|path| fs::remove_dir_all(path).is_ok())
-            .count()
+        remove_folders(paths)
     }
 }
 
@@ -69,6 +67,7 @@ impl Registry {
 mod tests {
     use super::*;
     use crate::private_dir::PrivateDir;
+    use std::fs;
 
     #[test]
     fn every_folder_on_the_list_is_removed_once() {

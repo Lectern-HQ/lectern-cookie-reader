@@ -44,7 +44,7 @@ mod macos {
         }
         let mut signals = Signals::new([SIGINT, SIGTERM, SIGHUP])?;
         std::thread::Builder::new()
-            .name("lectern-cookie-reader-signals".to_owned())
+            .name(concat!(env!("CARGO_PKG_NAME"), "-signals").to_owned())
             .spawn(move || {
                 if let Some(signal) = signals.forever().next() {
                     remove_work_folders();
