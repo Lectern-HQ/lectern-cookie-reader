@@ -25,3 +25,25 @@ mod unsupported;
 pub(crate) use unsupported::{
     chromium_key, default_browser, is_locked, is_protected, user_data_dir,
 };
+
+/// `browser`'s details for `system`, or [`crate::Error::Unsupported`] when the catalog has
+/// none: the browser does not exist there, or is not read there.
+#[cfg(any(target_os = "macos", windows))]
+fn details<T>(
+    browser: crate::Browser,
+    details: Option<&'static T>,
+    system: &str,
+) -> crate::Result<&'static T> {
+    details.ok_or_else(|| crate::Error::Unsupported(format!("{} on {system}", browser.name())))
+}
+
+/// The folder the environment variable `name` holds, such as `HOME` or `LOCALAPPDATA`.
+#[cfg(any(target_os = "macos", windows))]
+fn env_folder(name: &str) -> crate::Result<std::path::PathBuf> {
+    std::env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| {
+            crate::Error::Unsupported(format!("the {name} environment variable is not set"))
+        })
+}

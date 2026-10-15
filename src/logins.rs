@@ -74,15 +74,12 @@ fn find_in(data_dirs: &[(Browser, PathBuf)], domains: &[String], now_unix: i64) 
     let mut profiles = Vec::new();
     let mut skipped = Vec::new();
     for (browser, data_dir) in data_dirs {
-        if platform::is_protected(*browser) {
-            skipped.push(Skipped {
-                browser: *browser,
-                path: data_dir.clone(),
-                error: Error::PermissionNeeded(data_dir.clone()),
-            });
-            continue;
-        }
-        match profiles_in(*browser, data_dir) {
+        let found = if platform::is_protected(*browser) {
+            Err(Error::PermissionNeeded(data_dir.clone()))
+        } else {
+            profiles_in(*browser, data_dir)
+        };
+        match found {
             Ok(found) => profiles.extend(found),
             Err(error) => skipped.push(Skipped {
                 browser: *browser,

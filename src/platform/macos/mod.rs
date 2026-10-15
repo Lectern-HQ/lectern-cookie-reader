@@ -7,26 +7,19 @@ mod launch_services;
 use std::path::PathBuf;
 
 use crate::browser::MacOs;
-use crate::{Browser, Error, Result};
+use crate::{Browser, Result};
 
 pub(crate) use keychain::chromium_key;
 pub(crate) use launch_services::default_browser;
 
 /// The browser's macOS details, or an error if it does not exist on macOS.
 fn macos(browser: Browser) -> Result<&'static MacOs> {
-    browser
-        .spec()
-        .macos
-        .as_ref()
-        .ok_or_else(|| Error::Unsupported(format!("{} on macOS", browser.name())))
+    super::details(browser, browser.spec().macos.as_ref(), "macOS")
 }
 
 /// The folder that holds `browser`'s profiles, under the user's home folder.
 pub(crate) fn user_data_dir(browser: Browser) -> Result<PathBuf> {
-    let home = std::env::var_os("HOME")
-        .filter(|home| !home.is_empty())
-        .ok_or_else(|| Error::Unsupported("the HOME environment variable is not set".into()))?;
-    Ok(PathBuf::from(home).join(macos(browser)?.data_dir))
+    Ok(super::env_folder("HOME")?.join(macos(browser)?.data_dir))
 }
 
 /// Whether macOS protects `browser`'s data folder (Safari's container), so that reading

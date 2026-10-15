@@ -19,11 +19,7 @@ pub(crate) use owner_only::create_owner_only_dir;
 
 /// The browser's Windows details, or an error if it is not read on Windows.
 fn windows(browser: Browser) -> Result<&'static Windows> {
-    browser
-        .spec()
-        .windows
-        .as_ref()
-        .ok_or_else(|| Error::Unsupported(format!("{} on Windows", browser.name())))
+    super::details(browser, browser.spec().windows.as_ref(), "Windows")
 }
 
 /// The environment variable that names `base`.
@@ -37,11 +33,7 @@ fn variable(base: AppData) -> &'static str {
 /// The folder that holds `browser`'s profiles, under the user's app data folder.
 pub(crate) fn user_data_dir(browser: Browser) -> Result<PathBuf> {
     let details = windows(browser)?;
-    let name = variable(details.base);
-    let base = std::env::var_os(name)
-        .filter(|base| !base.is_empty())
-        .ok_or_else(|| Error::Unsupported(format!("the {name} environment variable is not set")))?;
-    Ok(PathBuf::from(base).join(details.data_dir))
+    Ok(super::env_folder(variable(details.base))?.join(details.data_dir))
 }
 
 /// The browser's AES-256-GCM key: read from `Local State` in its data folder and
