@@ -14,7 +14,9 @@ pub(crate) use macos::{chromium_key, default_browser, is_protected, user_data_di
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
-pub(crate) use windows::{chromium_key, default_browser, is_protected, user_data_dir};
+pub(crate) use windows::{
+    chromium_key, create_owner_only_dir, default_browser, is_protected, user_data_dir,
+};
 
 #[cfg(not(any(target_os = "macos", windows)))]
 mod unsupported;

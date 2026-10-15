@@ -54,10 +54,7 @@ fn reads_the_sites_cookies_and_writes_the_cookie_file() {
     assert_eq!(cookies.len(), 1);
     assert_eq!(cookies[0].domain, ".unige.ch");
     assert_eq!(cookies[0].value.expose(), "generated");
-    let file = CookieFile::create(&cookies);
-    if cfg!(unix) {
-        assert!(file.is_ok());
-    }
+    assert!(CookieFile::create(&cookies).is_ok());
 }
 
 #[test]

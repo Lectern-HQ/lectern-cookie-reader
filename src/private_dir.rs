@@ -23,14 +23,14 @@ impl PrivateDir {
         Self::new_in(&std::env::temp_dir())
     }
 
-    /// The folder is created in one step with its final permissions (owner only on Unix),
+    /// The folder is created in one step with its final permissions (owner only),
     /// and creating fails if the name already exists, so a folder prepared by someone else
     /// is never reused.
     pub(crate) fn new_in(parent: &Path) -> Result<Self> {
         let mut last_error = None;
         for _ in 0..ATTEMPTS {
             let path = parent.join(unique_name());
-            match builder().create(&path) {
+            match create_owner_only(&path) {
                 Ok(()) => return Ok(Self { path }),
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => last_error = Some(e),
                 Err(e) => return Err(work_folder_error(&path, e)),
@@ -64,16 +64,17 @@ pub(crate) fn work_folder_error(path: &Path, error: std::io::Error) -> Error {
     }
 }
 
-/// A folder builder that creates folders readable only by the user (on Unix).
-fn builder() -> fs::DirBuilder {
-    #[allow(unused_mut)]
-    let mut builder = fs::DirBuilder::new();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        builder.mode(0o700);
-    }
-    builder
+/// Creates the folder `path` that only the user can open: mode 0700 on Unix.
+#[cfg(unix)]
+fn create_owner_only(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    fs::DirBuilder::new().mode(0o700).create(path)
+}
+
+/// Creates the folder `path` that only the user can open: an access list on Windows.
+#[cfg(windows)]
+fn create_owner_only(path: &Path) -> std::io::Result<()> {
+    crate::platform::create_owner_only_dir(path)
 }
 
 /// A name no other folder of this crate uses: process id, time and a counter.
