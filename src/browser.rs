@@ -7,11 +7,14 @@ use crate::{Result, platform};
 
 /// How a browser stores its cookies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Engine {
     /// Chrome, Arc, Dia, Brave, Edge, ...: SQLite database with encrypted values.
     Chromium,
     /// Firefox, Zen, LibreWolf, ...: SQLite database with plain values.
     Firefox,
+    /// Safari: one `Cookies.binarycookies` file with plain values, protected by macOS.
+    Safari,
 }
 
 /// Where a browser keeps its profiles inside its data folder.
@@ -35,6 +38,9 @@ pub(crate) struct MacOs {
     pub(crate) keychain_name: Option<&'static str>,
     /// File name of the app in `/Applications`.
     pub(crate) app_name: &'static str,
+    /// Whether macOS protects the data folder, so that reading it needs the user's
+    /// permission. Such a folder is never touched without the app asking for it.
+    pub(crate) protected: bool,
 }
 
 /// One browser's entry in the catalog.
@@ -64,8 +70,8 @@ impl Browser {
     }
 
     /// The browser with this id (`arc`, `brave`, `chrome`, `chromium`, `dia`, `edge`,
-    /// `firefox`, `floorp`, `librewolf`, `opera`, `vivaldi`, `waterfox`, `zen`), or `None`
-    /// for one this crate does not know.
+    /// `firefox`, `floorp`, `librewolf`, `opera`, `safari`, `vivaldi`, `waterfox`, `zen`),
+    /// or `None` for one this crate does not know.
     pub fn by_id(id: &str) -> Option<Browser> {
         Self::all().find(|b| b.id() == id)
     }
@@ -97,12 +103,16 @@ impl Browser {
 
     /// The profiles of this browser on this computer that have a cookie database, the
     /// default profile first. Empty if the browser is not installed.
+    ///
+    /// For a browser whose data the system protects (Safari), nothing is read: the
+    /// default profile is returned without checking it, so no permission dialog appears.
     pub fn profiles(self) -> Result<Vec<Profile>> {
         profile::profiles_in(self, &platform::user_data_dir(self)?)
     }
 
     /// The profile the browser opens when the user never created another one. For the
-    /// Firefox family, the profile `profiles.ini` marks as the default.
+    /// Firefox family, the profile `profiles.ini` marks as the default. For Safari, the
+    /// folder of its cookie file, `Cookies.binarycookies`.
     pub fn default_profile(self) -> Result<Profile> {
         profile::default_profile(self, &platform::user_data_dir(self)?)
     }

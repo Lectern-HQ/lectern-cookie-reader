@@ -42,6 +42,7 @@ mod platform;
 mod private_dir;
 mod profile;
 mod reader;
+mod safari;
 mod suggest;
 
 pub use browser::{Browser, Engine};

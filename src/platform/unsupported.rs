@@ -21,6 +21,11 @@ pub(crate) fn default_browser() -> Option<DefaultBrowser> {
     None
 }
 
+/// Always `false`: no folder is known on this system, so none is protected.
+pub(crate) fn is_protected(_browser: Browser) -> bool {
+    false
+}
+
 /// The error that names the browser and says only macOS is supported for now.
 fn unsupported(browser: Browser) -> Error {
     Error::Unsupported(format!(

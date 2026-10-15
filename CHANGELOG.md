@@ -5,7 +5,11 @@ All notable changes to this library. The format follows [Keep a Changelog](https
 ## [Unreleased]
 
 ### Added
+- Safari on macOS (`safari` in the catalog, `Engine::Safari`): a parser for `Cookies.binarycookies`, and `read_cookies` for a Safari profile. macOS protects the file, so the app asks the user to pick it in a file dialog; `find_logins` never reads it and lists Safari in `Scan::skipped` with the new `Error::PermissionNeeded`. `default_browser()` now matches Safari. Not tested on a real Mac yet.
 - The Firefox family on macOS: Firefox, Floorp, LibreWolf, Waterfox and Zen in the catalog. Profiles are found through `profiles.ini`, and `read_cookies`, `find_logins` and `suggest` work as for Chromium browsers. Values are stored without encryption, so there is no permission dialog. Only cookies of normal tabs are read, not those of containers or partitioned third-party cookies. Database schema versions 12 to 16 are accepted. Not tested on a real Mac yet.
+
+### Changed
+- **Breaking:** `Engine` is `non_exhaustive`, so a `match` on it needs a wildcard arm. New engines can then be added without another breaking change.
 
 ## [0.3.0] - 2026-10-15
 
