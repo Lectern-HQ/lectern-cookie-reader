@@ -24,6 +24,7 @@ core-foundation = "0.10"
 core-foundation-sys = "0.8"
 security-framework = "3.7"
 libc = "0.2"
+signal-hook = "0.4"
 
 [target.'cfg(windows)'.dependencies]
 aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }

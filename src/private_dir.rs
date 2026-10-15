@@ -1,5 +1,6 @@
 //! A temporary folder that only the current user can open. It is removed, with everything
-//! in it, when it goes out of scope, also after an error or a panic.
+//! in it, when it goes out of scope, also after an error or a panic. While it exists, it is
+//! on the list of work folders removed on the way out (`work_folders.rs`).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -36,7 +37,10 @@ impl PrivateDir {
         for _ in 0..ATTEMPTS {
             let path = parent.join(unique_name());
             match create_owner_only(&path) {
-                Ok(()) => return Ok(Self { path }),
+                Ok(()) => {
+                    crate::work_folders::LIVE.add(&path);
+                    return Ok(Self { path });
+                }
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => last_error = Some(e),
                 Err(e) => return Err(work_folder_error(&path, e)),
             }
@@ -57,6 +61,7 @@ impl Drop for PrivateDir {
     fn drop(&mut self) {
         // Nothing useful can be done with an error while dropping. The folder is in the
         // system's temporary folder and holds only files of this crate.
+        crate::work_folders::LIVE.remove(&self.path);
         let _ = fs::remove_dir_all(&self.path);
     }
 }

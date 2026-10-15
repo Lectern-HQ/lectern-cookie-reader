@@ -45,8 +45,10 @@ mod private_dir;
 mod profile;
 mod reader;
 mod safari;
+mod signals;
 mod sqlite_store;
 mod suggest;
+mod work_folders;
 
 pub use browser::{Browser, Engine};
 pub use cookie::{Cookie, SecretValue};
@@ -58,7 +60,9 @@ pub use leftovers::remove_leftovers;
 pub use logins::{Checked, Login, Scan, Skipped, find_logins};
 pub use profile::Profile;
 pub use reader::read_cookies;
+pub use signals::clean_up_on_signals;
 pub use suggest::{Reason, Suggestion, suggest};
+pub use work_folders::remove_work_folders;
 
 /// Result type used by this crate.
 pub type Result<T> = std::result::Result<T, Error>;
