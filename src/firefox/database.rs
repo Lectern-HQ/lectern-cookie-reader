@@ -10,7 +10,8 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
 
-use crate::database_copy::{DatabaseCopy, placeholders, query_error, time_and_domains, unreadable};
+use crate::database_copy::{DatabaseCopy, placeholders, query_error, time_and_domains};
+use crate::files::unreadable;
 use crate::{Cookie, Error, Result, SecretValue};
 
 /// The cookie database's file name in a Firefox profile folder.

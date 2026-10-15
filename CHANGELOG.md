@@ -13,7 +13,10 @@ All notable changes to this library. The format follows [Keep a Changelog](https
 - App-bound encryption (`v20` values, Chrome and Edge on Windows since version 127) is detected before the key is requested and reported as the new `Error::AppBoundEncryption`, so the app can offer the `cookies.txt` fallback. It is never bypassed.
 - `CookieFile` on Windows: its folder is created with an access list that lets only the current user in and inherits nothing, and the file inherits it. Every private work folder of the crate uses the same list.
 
+- `Error::InvalidKey`: the browser's stored key does not have the expected size or format.
+
 ### Changed
+- Every failure to read a browser file or folder is reported the same way: `PermissionNeeded` when the system refuses access (it was `DatabaseUnreadable` for profile folders, `profiles.ini` and `Local State`), `DatabaseLocked` when the running browser locks it, `DatabaseNotFound` when it is missing.
 - **Breaking:** `Engine` is `non_exhaustive`, so a `match` on it needs a wildcard arm. New engines can then be added without another breaking change.
 
 ## [0.3.0] - 2026-10-15

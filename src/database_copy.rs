@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::ToSql;
 
+use crate::files::read_error;
 use crate::private_dir::PrivateDir;
 use crate::{Error, Result};
 
@@ -63,32 +64,11 @@ pub(crate) fn copy_database(source: &Path, folder: &Path) -> Result<PathBuf> {
     Ok(copy)
 }
 
-/// Windows' `ERROR_SHARING_VIOLATION`: another program opened the file without sharing it.
-const ERROR_SHARING_VIOLATION: i32 = 32;
-
 /// Copies one file, reporting the source path if it fails.
 fn copy_file(from: &Path, to: &Path) -> Result<()> {
-    fs::copy(from, to).map(|_| ()).map_err(|e| {
-        if is_locked(&e) {
-            Error::DatabaseLocked(from.to_owned())
-        } else {
-            unreadable(from, e)
-        }
-    })
-}
-
-/// Whether the copy failed because the running browser keeps the file locked, as Chrome
-/// does on Windows.
-fn is_locked(error: &std::io::Error) -> bool {
-    cfg!(windows) && error.raw_os_error() == Some(ERROR_SHARING_VIOLATION)
-}
-
-/// The error for a database file that could not be copied or opened.
-pub(crate) fn unreadable(path: &Path, reason: impl std::fmt::Display) -> Error {
-    Error::DatabaseUnreadable {
-        path: path.to_owned(),
-        reason: reason.to_string(),
-    }
+    fs::copy(from, to)
+        .map(|_| ())
+        .map_err(|e| read_error(from, e))
 }
 
 /// A database error as this crate's error, with SQLite's reason.
@@ -149,13 +129,6 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), "x");
         drop(copy);
         assert!(!path.exists());
-    }
-
-    #[test]
-    fn only_a_sharing_violation_on_windows_is_a_lock() {
-        let sharing = std::io::Error::from_raw_os_error(ERROR_SHARING_VIOLATION);
-        assert_eq!(is_locked(&sharing), cfg!(windows));
-        assert!(!is_locked(&std::io::Error::other("disk full")));
     }
 
     #[test]

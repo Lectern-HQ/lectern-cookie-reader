@@ -7,7 +7,8 @@ use rusqlite::Connection;
 
 use crate::chromium::crypto::{self, ChromiumKey};
 use crate::chromium::{chromium_to_unix, unix_to_chromium};
-use crate::database_copy::{DatabaseCopy, placeholders, query_error, time_and_domains, unreadable};
+use crate::database_copy::{DatabaseCopy, placeholders, query_error, time_and_domains};
+use crate::files::unreadable;
 use crate::{Cookie, Error, Result};
 
 /// The cookie database's file name in a Chromium profile folder.

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use zeroize::Zeroizing;
 
+use crate::files::read_error;
 use crate::safari::binary_cookies::{self, Record};
 use crate::{Cookie, Error, Result, SecretValue};
 
@@ -35,19 +36,10 @@ impl CookieFileData {
     /// [`Error::PermissionNeeded`].
     pub(crate) fn of(profile_dir: &Path) -> Result<Self> {
         let path = database_path(profile_dir);
-        match std::fs::read(&path) {
-            Ok(data) => Ok(Self {
-                data: Zeroizing::new(data),
-            }),
-            Err(e) => Err(match e.kind() {
-                std::io::ErrorKind::NotFound => Error::DatabaseNotFound(path),
-                std::io::ErrorKind::PermissionDenied => Error::PermissionNeeded(path),
-                _ => Error::DatabaseUnreadable {
-                    path,
-                    reason: e.to_string(),
-                },
-            }),
-        }
+        let data = std::fs::read(&path).map_err(|e| read_error(&path, e))?;
+        Ok(Self {
+            data: Zeroizing::new(data),
+        })
     }
 
     /// When an unexpired cookie stored under one of `domains` was created, the latest, as
