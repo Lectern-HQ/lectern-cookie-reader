@@ -75,7 +75,7 @@ Every error says what failed, never a cookie value. The ones an app usually hand
 1. Copies the profile's cookie database into a temporary folder only you can open. The browser's own file is never opened or changed.
 2. Looks for cookies of the website you asked about, using standard cookie domain matching. This step only reads site names, which browsers store unencrypted. If there are none, it stops here and macOS shows no dialog.
 3. For Chromium browsers, asks macOS for the browser's "Safe Storage" key through Apple's Keychain API. macOS shows its own dialog first, and you decide.
-4. Decrypts only the cookies that match that website, and refuses any value the browser stored for another site.
+4. Decrypts only the cookies that match that website, and refuses any value the browser stored for another site. The Firefox family stores values without encryption, so steps 3 and 4 do not apply and there is no dialog; only the cookies of normal tabs are read, not those of containers.
 5. If asked, writes them to a `cookies.txt` file readable only by you, deleted as soon as the app is done with it.
 
 ## What it never does
@@ -92,7 +92,7 @@ Every error says what failed, never a cookie value. The ones an app usually hand
 | --- | --- | --- |
 | Dia | Tested | Not available |
 | Arc, Brave, Google Chrome, Chromium, Microsoft Edge, Opera, Vivaldi | In the catalog, not tested yet ([#54](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/54)) | Planned ([#8](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/8)) |
-| Firefox family | Planned ([#6](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/6)) | Planned ([#8](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/8)) |
+| Firefox, Floorp, LibreWolf, Waterfox, Zen | In the catalog, not tested yet ([#6](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/6)) | Planned ([#8](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/8)) |
 | Safari | Planned, needs your explicit permission to read its protected cookie file ([#7](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/7)) | Not available |
 
 Finding which browser and profile is logged in (`find_logins`, `suggest`) covers every browser in the catalog.

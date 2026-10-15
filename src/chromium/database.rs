@@ -1,77 +1,42 @@
 //! Reads cookie rows from a copy of a Chromium cookie database. The browser's own file is
 //! only ever copied, never opened, so a running browser is not disturbed.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
-use rusqlite::{Connection, ToSql};
+use rusqlite::Connection;
 
 use crate::chromium::{chromium_to_unix, crypto, unix_to_chromium};
-use crate::private_dir::PrivateDir;
+use crate::database_copy::{DatabaseCopy, placeholders, query_error, time_and_domains, unreadable};
 use crate::{Cookie, Error, Result};
 
 /// The cookie database's file name in a Chromium profile folder.
 const DATABASE_FILE: &str = "Cookies";
-/// SQLite keeps recent changes in these files next to the database until it merges them.
-/// Without them the copy could miss a login that just happened.
-const SIDECAR_SUFFIXES: &[&str] = &["-wal", "-journal"];
+
+/// The cookie database of the Chromium profile in `profile_dir`.
+fn database_path(profile_dir: &Path) -> PathBuf {
+    profile_dir.join(DATABASE_FILE)
+}
 
 /// Whether `profile_dir` holds a Chromium cookie database.
 pub(crate) fn has_database(profile_dir: &Path) -> bool {
-    profile_dir.join(DATABASE_FILE).is_file()
-}
-
-/// Copies the cookie database of a profile, with its SQLite sidecar files, into `folder`
-/// and returns the path of the copy.
-pub(crate) fn copy_database(profile_dir: &Path, folder: &Path) -> Result<PathBuf> {
-    let source = profile_dir.join(DATABASE_FILE);
-    if !has_database(profile_dir) {
-        return Err(Error::DatabaseNotFound(source));
-    }
-    copy_file(&source, &folder.join(DATABASE_FILE))?;
-    for suffix in SIDECAR_SUFFIXES {
-        let name = format!("{DATABASE_FILE}{suffix}");
-        let sidecar = profile_dir.join(&name);
-        if sidecar.is_file() {
-            copy_file(&sidecar, &folder.join(name))?;
-        }
-    }
-    Ok(folder.join(DATABASE_FILE))
-}
-
-/// Copies one file, reporting the source path if it fails.
-fn copy_file(from: &Path, to: &Path) -> Result<()> {
-    fs::copy(from, to)
-        .map(|_| ())
-        .map_err(|e| unreadable(from, e))
-}
-
-/// The error for a database file that could not be copied or opened.
-fn unreadable(path: &Path, reason: impl std::fmt::Display) -> Error {
-    Error::DatabaseUnreadable {
-        path: path.to_owned(),
-        reason: reason.to_string(),
-    }
+    database_path(profile_dir).is_file()
 }
 
 /// A profile's cookie database, copied into a private folder and opened. Dropping it
 /// closes the database, then deletes the copy with its folder.
 pub(crate) struct ProfileCopy {
-    /// The opened copy. Declared first, so it is closed before the folder is deleted.
+    /// The opened copy. Declared first, so it is closed before the copy is deleted.
     db: CookieDb,
-    /// The private folder holding the copy.
-    _folder: PrivateDir,
+    /// The copy in its private folder.
+    _copy: DatabaseCopy,
 }
 
 impl ProfileCopy {
     /// Copies the cookie database of the profile in `profile_dir` and opens the copy.
     pub(crate) fn of(profile_dir: &Path) -> Result<Self> {
-        let folder = PrivateDir::new()?;
-        let db = CookieDb::open(&copy_database(profile_dir, folder.path())?)?;
-        Ok(Self {
-            db,
-            _folder: folder,
-        })
+        let copy = DatabaseCopy::of(&database_path(profile_dir))?;
+        let db = CookieDb::open(copy.path())?;
+        Ok(Self { db, _copy: copy })
     }
 
     /// The opened copy.
@@ -115,7 +80,7 @@ impl CookieDb {
         let now = unix_to_chromium(now_unix);
         let last_access: Option<i64> = self
             .conn
-            .query_row(&sql, query_params(&now, domains).as_slice(), |row| {
+            .query_row(&sql, time_and_domains(&now, domains).as_slice(), |row| {
                 row.get(0)
             })
             .map_err(query_error)?;
@@ -154,7 +119,7 @@ impl CookieDb {
         let now = unix_to_chromium(now_unix);
         let mut statement = self.conn.prepare(&sql).map_err(query_error)?;
         let mut rows = statement
-            .query(query_params(&now, domains).as_slice())
+            .query(time_and_domains(&now, domains).as_slice())
             .map_err(query_error)?;
         let mut cookies = Vec::new();
         while let Some(row) = rows.next().map_err(query_error)? {
@@ -182,23 +147,10 @@ impl CookieDb {
 /// the current time, `?2` onwards are the domains. Values are always passed as parameters,
 /// never written into the SQL text.
 fn matching_rows(domain_count: usize) -> String {
-    let placeholders = (2..domain_count + 2)
-        .map(|i| format!("?{i}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("host_key IN ({placeholders}) AND (has_expires = 0 OR expires_utc > ?1)")
-}
-
-/// The query's parameters in order: the current time as `?1`, then each domain.
-fn query_params<'a>(now: &'a i64, domains: &'a [String]) -> Vec<&'a dyn ToSql> {
-    let mut params: Vec<&dyn ToSql> = vec![now];
-    params.extend(domains.iter().map(|d| d as &dyn ToSql));
-    params
-}
-
-/// A database error as this crate's error, with SQLite's reason.
-fn query_error(error: rusqlite::Error) -> Error {
-    Error::DatabaseQuery(error.to_string())
+    format!(
+        "host_key IN ({}) AND (has_expires = 0 OR expires_utc > ?1)",
+        placeholders(2, domain_count)
+    )
 }
 
 #[cfg(test)]
@@ -294,30 +246,6 @@ mod tests {
         assert!(matches!(
             CookieDb::open(&path),
             Err(Error::UnsupportedDatabaseVersion(25))
-        ));
-    }
-
-    #[test]
-    fn copy_includes_the_sidecar_files() {
-        let profile = PrivateDir::new().unwrap();
-        let copy = PrivateDir::new().unwrap();
-        for name in ["Cookies", "Cookies-wal", "Cookies-journal"] {
-            fs::write(profile.path().join(name), name).unwrap();
-        }
-        let copied = copy_database(profile.path(), copy.path()).unwrap();
-        assert_eq!(copied, copy.path().join("Cookies"));
-        for name in ["Cookies", "Cookies-wal", "Cookies-journal"] {
-            assert_eq!(fs::read_to_string(copy.path().join(name)).unwrap(), name);
-        }
-    }
-
-    #[test]
-    fn missing_database_is_its_own_error() {
-        let profile = PrivateDir::new().unwrap();
-        let copy = PrivateDir::new().unwrap();
-        assert!(matches!(
-            copy_database(profile.path(), copy.path()),
-            Err(Error::DatabaseNotFound(_))
         ));
     }
 }
