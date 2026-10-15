@@ -88,7 +88,14 @@ Every error says what failed, never a cookie value. The ones an app usually hand
 
 ## Supported browsers
 
-Tested: Dia on macOS. Planned: finding which browser and profile is logged in, other Chromium browsers and the Firefox family on macOS, then Windows, then Safari (needs your explicit permission to read its protected cookie file).
+| Browser | macOS | Windows |
+| --- | --- | --- |
+| Dia | Tested | Not available |
+| Arc, Brave, Google Chrome, Chromium, Microsoft Edge, Opera, Vivaldi | In the catalog, not tested yet ([#54](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/54)) | Planned ([#8](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/8)) |
+| Firefox family | Planned ([#6](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/6)) | Planned ([#8](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/8)) |
+| Safari | Planned, needs your explicit permission to read its protected cookie file ([#7](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/7)) | Not available |
+
+Finding which browser and profile is logged in (`find_logins`, `suggest`) covers every browser in the catalog.
 
 ## Development
 
