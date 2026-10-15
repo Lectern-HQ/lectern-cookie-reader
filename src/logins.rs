@@ -5,9 +5,9 @@
 use std::cmp::Reverse;
 use std::path::PathBuf;
 
-use crate::chromium::database::ProfileCopy;
 use crate::clock::now_unix;
 use crate::domain::domains_for;
+use crate::engine_store::StoreCopy;
 use crate::profile::profiles_in;
 use crate::{Browser, Error, Profile, Result, platform};
 
@@ -125,11 +125,8 @@ fn check(
     domains: &[String],
     now_unix: i64,
 ) -> Result<(Option<i64>, Option<i64>)> {
-    let copy = ProfileCopy::of(&profile.path)?;
-    Ok((
-        copy.db().last_used_for(domains, now_unix)?,
-        copy.db().last_active()?,
-    ))
+    let copy = StoreCopy::of(profile)?;
+    Ok((copy.last_used_for(domains, now_unix)?, copy.last_active()?))
 }
 
 #[cfg(test)]

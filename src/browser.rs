@@ -21,6 +21,8 @@ pub(crate) enum ProfileLayout {
     Folders,
     /// The data folder itself is the only profile (Opera).
     Single,
+    /// Profiles are listed in `profiles.ini` in the data folder (the Firefox family).
+    ProfilesIni,
 }
 
 /// Where a browser keeps its data on macOS, and the names macOS knows it by.
@@ -28,8 +30,9 @@ pub(crate) enum ProfileLayout {
 pub(crate) struct MacOs {
     /// The folder that holds the profiles, relative to the home folder.
     pub(crate) data_dir: &'static str,
-    /// The Keychain item has the service "<name> Safe Storage" and the account "<name>".
-    pub(crate) keychain_name: &'static str,
+    /// For Chromium browsers, the Keychain item with the service "<name> Safe Storage" and
+    /// the account "<name>". `None` for browsers that do not encrypt their cookies.
+    pub(crate) keychain_name: Option<&'static str>,
     /// File name of the app in `/Applications`.
     pub(crate) app_name: &'static str,
 }
@@ -61,7 +64,8 @@ impl Browser {
     }
 
     /// The browser with this id (`arc`, `brave`, `chrome`, `chromium`, `dia`, `edge`,
-    /// `opera`, `vivaldi`), or `None` for one this crate does not know.
+    /// `firefox`, `floorp`, `librewolf`, `opera`, `vivaldi`, `waterfox`, `zen`), or `None`
+    /// for one this crate does not know.
     pub fn by_id(id: &str) -> Option<Browser> {
         Self::all().find(|b| b.id() == id)
     }
@@ -86,18 +90,19 @@ impl Browser {
         self.0
     }
 
-    /// Whether the browser keeps several profiles in subfolders (`Default`, `Profile 1`).
-    pub(crate) fn has_profiles(self) -> bool {
-        self.spec().layout == ProfileLayout::Folders
+    /// Where the browser keeps its profiles inside its data folder.
+    pub(crate) fn layout(self) -> ProfileLayout {
+        self.spec().layout
     }
 
-    /// The profiles of this browser on this computer that have a cookie database,
-    /// `Default` first. Empty if the browser is not installed.
+    /// The profiles of this browser on this computer that have a cookie database, the
+    /// default profile first. Empty if the browser is not installed.
     pub fn profiles(self) -> Result<Vec<Profile>> {
         profile::profiles_in(self, &platform::user_data_dir(self)?)
     }
 
-    /// The profile the browser opens when the user never created another one.
+    /// The profile the browser opens when the user never created another one. For the
+    /// Firefox family, the profile `profiles.ini` marks as the default.
     pub fn default_profile(self) -> Result<Profile> {
         profile::default_profile(self, &platform::user_data_dir(self)?)
     }
@@ -158,7 +163,8 @@ pub(crate) mod tests {
 
     #[test]
     fn the_profile_layout_comes_from_the_catalog() {
-        assert!(browser("chrome").has_profiles());
-        assert!(!browser("opera").has_profiles());
+        assert_eq!(browser("chrome").layout(), ProfileLayout::Folders);
+        assert_eq!(browser("opera").layout(), ProfileLayout::Single);
+        assert_eq!(browser("firefox").layout(), ProfileLayout::ProfilesIni);
     }
 }

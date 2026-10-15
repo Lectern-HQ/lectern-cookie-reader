@@ -1,8 +1,9 @@
 //! Every browser this crate knows, one entry each. **To add a browser, add one entry here**:
 //! nothing else in the crate lists browsers, and the tests below check every entry.
 //!
-//! macOS folders and Keychain names follow yt-dlp's table (`yt_dlp/cookies.py`); Arc and
-//! Dia were added here. Only Dia has been tested on a real Mac so far.
+//! Chromium folders and Keychain names on macOS follow yt-dlp's table (`yt_dlp/cookies.py`);
+//! Arc and Dia were added here. The Firefox family's folders are each browser's
+//! `profiles.ini` folder. Only Dia has been tested on a real Mac so far (issues #54, #6).
 
 use crate::browser::{Engine, MacOs, ProfileLayout, Spec};
 
@@ -15,7 +16,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
         layout: ProfileLayout::Folders,
         macos: Some(MacOs {
             data_dir: "Library/Application Support/Arc/User Data",
-            keychain_name: "Arc",
+            keychain_name: Some("Arc"),
             app_name: "Arc.app",
         }),
     },
@@ -26,7 +27,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
         layout: ProfileLayout::Folders,
         macos: Some(MacOs {
             data_dir: "Library/Application Support/BraveSoftware/Brave-Browser",
-            keychain_name: "Brave",
+            keychain_name: Some("Brave"),
             app_name: "Brave Browser.app",
         }),
     },
@@ -37,7 +38,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
         layout: ProfileLayout::Folders,
         macos: Some(MacOs {
             data_dir: "Library/Application Support/Google/Chrome",
-            keychain_name: "Chrome",
+            keychain_name: Some("Chrome"),
             app_name: "Google Chrome.app",
         }),
     },
@@ -48,7 +49,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
         layout: ProfileLayout::Folders,
         macos: Some(MacOs {
             data_dir: "Library/Application Support/Chromium",
-            keychain_name: "Chromium",
+            keychain_name: Some("Chromium"),
             app_name: "Chromium.app",
         }),
     },
@@ -59,7 +60,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
         layout: ProfileLayout::Folders,
         macos: Some(MacOs {
             data_dir: "Library/Application Support/Dia/User Data",
-            keychain_name: "Dia",
+            keychain_name: Some("Dia"),
             app_name: "Dia.app",
         }),
     },
@@ -70,8 +71,41 @@ pub(crate) const BROWSERS: &[Spec] = &[
         layout: ProfileLayout::Folders,
         macos: Some(MacOs {
             data_dir: "Library/Application Support/Microsoft Edge",
-            keychain_name: "Microsoft Edge",
+            keychain_name: Some("Microsoft Edge"),
             app_name: "Microsoft Edge.app",
+        }),
+    },
+    Spec {
+        id: "firefox",
+        name: "Firefox",
+        engine: Engine::Firefox,
+        layout: ProfileLayout::ProfilesIni,
+        macos: Some(MacOs {
+            data_dir: "Library/Application Support/Firefox",
+            keychain_name: None,
+            app_name: "Firefox.app",
+        }),
+    },
+    Spec {
+        id: "floorp",
+        name: "Floorp",
+        engine: Engine::Firefox,
+        layout: ProfileLayout::ProfilesIni,
+        macos: Some(MacOs {
+            data_dir: "Library/Application Support/Floorp",
+            keychain_name: None,
+            app_name: "Floorp.app",
+        }),
+    },
+    Spec {
+        id: "librewolf",
+        name: "LibreWolf",
+        engine: Engine::Firefox,
+        layout: ProfileLayout::ProfilesIni,
+        macos: Some(MacOs {
+            data_dir: "Library/Application Support/librewolf",
+            keychain_name: None,
+            app_name: "LibreWolf.app",
         }),
     },
     Spec {
@@ -81,7 +115,7 @@ pub(crate) const BROWSERS: &[Spec] = &[
         layout: ProfileLayout::Single,
         macos: Some(MacOs {
             data_dir: "Library/Application Support/com.operasoftware.Opera",
-            keychain_name: "Opera",
+            keychain_name: Some("Opera"),
             app_name: "Opera.app",
         }),
     },
@@ -92,8 +126,30 @@ pub(crate) const BROWSERS: &[Spec] = &[
         layout: ProfileLayout::Folders,
         macos: Some(MacOs {
             data_dir: "Library/Application Support/Vivaldi",
-            keychain_name: "Vivaldi",
+            keychain_name: Some("Vivaldi"),
             app_name: "Vivaldi.app",
+        }),
+    },
+    Spec {
+        id: "waterfox",
+        name: "Waterfox",
+        engine: Engine::Firefox,
+        layout: ProfileLayout::ProfilesIni,
+        macos: Some(MacOs {
+            data_dir: "Library/Application Support/Waterfox",
+            keychain_name: None,
+            app_name: "Waterfox.app",
+        }),
+    },
+    Spec {
+        id: "zen",
+        name: "Zen",
+        engine: Engine::Firefox,
+        layout: ProfileLayout::ProfilesIni,
+        macos: Some(MacOs {
+            data_dir: "Library/Application Support/zen",
+            keychain_name: None,
+            app_name: "Zen.app",
         }),
     },
 ];
@@ -118,8 +174,12 @@ mod tests {
             mac.iter().map(|m| of(m)).collect::<HashSet<_>>().len() == mac.len()
         };
         assert!(unique(|m| m.data_dir));
-        assert!(unique(|m| m.keychain_name));
         assert!(unique(|m| m.app_name));
+        let keychain: Vec<&str> = mac.iter().filter_map(|m| m.keychain_name).collect();
+        assert_eq!(
+            keychain.iter().collect::<HashSet<_>>().len(),
+            keychain.len()
+        );
     }
 
     #[test]
@@ -135,6 +195,12 @@ mod tests {
                 spec.id
             );
             assert!(!spec.name.is_empty(), "{}: empty name", spec.id);
+            assert_eq!(
+                spec.layout == ProfileLayout::ProfilesIni,
+                spec.engine == Engine::Firefox,
+                "{}: the Firefox family, and only it, lists profiles in profiles.ini",
+                spec.id
+            );
             if let Some(mac) = &spec.macos {
                 assert!(
                     mac.data_dir.starts_with("Library/Application Support/"),
@@ -142,7 +208,12 @@ mod tests {
                     spec.id
                 );
                 assert!(mac.app_name.ends_with(".app"), "{}", spec.id);
-                assert!(!mac.keychain_name.is_empty(), "{}", spec.id);
+                assert_eq!(
+                    mac.keychain_name.is_some_and(|n| !n.is_empty()),
+                    spec.engine == Engine::Chromium,
+                    "{}: a Keychain name for Chromium browsers only",
+                    spec.id
+                );
             }
         }
     }
@@ -160,7 +231,7 @@ mod tests {
         let dia = BROWSERS.iter().find(|s| s.id == "dia").unwrap();
         let mac = dia.macos.as_ref().unwrap();
         assert_eq!(mac.data_dir, "Library/Application Support/Dia/User Data");
-        assert_eq!(mac.keychain_name, "Dia");
+        assert_eq!(mac.keychain_name, Some("Dia"));
         assert_eq!(mac.app_name, "Dia.app");
     }
 }
