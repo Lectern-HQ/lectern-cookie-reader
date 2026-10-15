@@ -2,6 +2,8 @@
 
 pub(crate) mod crypto;
 pub(crate) mod database;
+#[cfg(any(windows, test))]
+pub(crate) mod local_state;
 #[cfg(test)]
 pub(crate) mod test_vectors;
 

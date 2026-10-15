@@ -1,11 +1,16 @@
-//! Windows: where each browser keeps its data. Each browser's Windows details are data in
-//! the catalog (`catalog.rs`). Only x64 Windows is supported.
+//! Windows: where each browser keeps its data, and its cookie key from `Local State`.
+//! Each browser's Windows details are data in the catalog (`catalog.rs`). Only x64 Windows
+//! is supported.
+
+mod dpapi;
 
 use std::path::PathBuf;
 
 use zeroize::Zeroizing;
 
 use crate::browser::{AppData, Windows};
+use crate::chromium::crypto::ChromiumKey;
+use crate::chromium::local_state;
 use crate::{Browser, DefaultBrowser, Error, Result};
 
 /// The browser's Windows details, or an error if it is not read on Windows.
@@ -35,12 +40,16 @@ pub(crate) fn user_data_dir(browser: Browser) -> Result<PathBuf> {
     Ok(PathBuf::from(base).join(details.data_dir))
 }
 
-/// Not yet: the key in `Local State` is read with DPAPI in issue #18.
-pub(crate) fn chromium_key(browser: Browser) -> Result<Zeroizing<[u8; 16]>> {
-    Err(Error::Unsupported(format!(
-        "decrypting {} cookies on Windows",
-        browser.name()
-    )))
+/// The browser's AES-256-GCM key: read from `Local State` in its data folder and
+/// unprotected with DPAPI for the current user. Windows shows no dialog.
+pub(crate) fn chromium_key(browser: Browser) -> Result<ChromiumKey> {
+    let protected = local_state::read_protected_key(&user_data_dir(browser)?)?;
+    let key = dpapi::unprotect(&protected)?;
+    let key: [u8; 32] = key
+        .as_slice()
+        .try_into()
+        .map_err(|_| Error::KeyUnavailable(-1))?;
+    Ok(ChromiumKey::Gcm(Zeroizing::new(key)))
 }
 
 /// Always `None` for now: the default browser is not read on Windows yet.
@@ -83,7 +92,7 @@ mod tests {
         assert!(!is_protected(browser("chrome")));
         assert!(default_browser().is_none());
         assert!(matches!(
-            chromium_key(browser("chrome")),
+            chromium_key(browser("dia")),
             Err(Error::Unsupported(_))
         ));
     }

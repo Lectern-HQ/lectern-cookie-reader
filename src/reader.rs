@@ -1,8 +1,7 @@
 //! The public lookup: the cookies of one website in one browser profile.
 
-use zeroize::Zeroizing;
-
 use crate::chromium;
+use crate::chromium::crypto::ChromiumKey;
 use crate::clock::now_unix;
 use crate::domain::domains_for;
 use crate::{Browser, Cookie, Engine, Profile, Result, platform};
@@ -40,7 +39,7 @@ fn read_chromium(
     profile: &Profile,
     domains: &[String],
     now_unix: i64,
-    chromium_key: impl FnOnce(Browser) -> Result<Zeroizing<[u8; 16]>>,
+    chromium_key: impl FnOnce(Browser) -> Result<ChromiumKey>,
 ) -> Result<Vec<Cookie>> {
     let copy = chromium::database::ProfileCopy::of(&profile.path)?;
     if copy.db().last_used_for(domains, now_unix)?.is_none() {
@@ -91,7 +90,7 @@ mod tests {
             NOW,
             |browser| {
                 asked_for = Some(browser);
-                Ok(Zeroizing::new(key()))
+                Ok(key())
             },
         )
         .unwrap();

@@ -9,6 +9,7 @@ All notable changes to this library. The format follows [Keep a Changelog](https
 - The Firefox family on macOS: Firefox, Floorp, LibreWolf, Waterfox and Zen in the catalog. Profiles are found through `profiles.ini`, and `read_cookies`, `find_logins` and `suggest` work as for Chromium browsers. Values are stored without encryption, so there is no permission dialog. Only cookies of normal tabs are read, not those of containers or partitioned third-party cookies. Database schema versions 12 to 16 are accepted. Not tested on a real Mac yet.
 
 - Windows (x64): each browser's data folder is in the catalog (Chromium browsers under `%LOCALAPPDATA%`, Opera and the Firefox family under `%APPDATA%`), so `profiles()`, `default_profile()` and `find_logins` work there. The Chromium database is read from `Network\Cookies` where it exists. A database the running browser keeps locked is the new `Error::DatabaseLocked`. Arc, Dia and Safari are not read on Windows.
+- Chromium cookies on Windows: the key is read from `Local State` and unprotected with DPAPI for the current user (no dialog), and `v10` values are decrypted with AES-256-GCM, with the same host hash check as on macOS.
 
 ### Changed
 - **Breaking:** `Engine` is `non_exhaustive`, so a `match` on it needs a wildcard arm. New engines can then be added without another breaking change.
