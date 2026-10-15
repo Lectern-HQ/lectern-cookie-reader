@@ -3,6 +3,7 @@
 
 mod keychain;
 mod launch_services;
+mod process;
 
 use std::path::PathBuf;
 
@@ -11,6 +12,7 @@ use crate::{Browser, Result};
 
 pub(crate) use keychain::chromium_key;
 pub(crate) use launch_services::default_browser;
+pub(crate) use process::is_running;
 
 /// The browser's macOS details, or an error if it does not exist on macOS.
 fn macos(browser: Browser) -> Result<&'static MacOs> {

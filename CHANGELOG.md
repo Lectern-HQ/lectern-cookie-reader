@@ -14,6 +14,7 @@ All notable changes to this library. The format follows [Keep a Changelog](https
 - `CookieFile` on Windows: its folder is created with an access list that lets only the current user in and inherits nothing, and the file inherits it. Every private work folder of the crate uses the same list.
 
 - `Error::InvalidKey`: the browser's stored key does not have the expected size or format.
+- `remove_leftovers()`: removes the work folders (cookie files and database copies) that a killed or crashed process left in the temporary folder, and returns how many. A folder is removed only when its process has certainly ended. It also runs once by itself before a process makes its first work folder.
 
 ### Changed
 - Every failure to read a browser file or folder is reported the same way: `PermissionNeeded` when the system refuses access (it was `DatabaseUnreadable` for profile folders, `profiles.ini` and `Local State`), `DatabaseLocked` when the running browser locks it, `DatabaseNotFound` when it is missing.

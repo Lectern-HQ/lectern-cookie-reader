@@ -11,6 +11,9 @@ use crate::{Error, Result};
 /// How many unused names to try before giving up.
 const ATTEMPTS: u32 = 8;
 
+/// The start of every work folder's name, followed by `{pid}-{nanos}-{counter}`.
+const PREFIX: &str = "lectern-cookie-reader-";
+
 /// A temporary folder that only the current user can open, removed when dropped.
 pub(crate) struct PrivateDir {
     /// Where the folder is.
@@ -18,8 +21,10 @@ pub(crate) struct PrivateDir {
 }
 
 impl PrivateDir {
-    /// Creates a new folder in the system's temporary folder.
+    /// Creates a new folder in the system's temporary folder. The first time in a process,
+    /// it first removes the folders that ended processes left there.
     pub(crate) fn new() -> Result<Self> {
+        crate::leftovers::remove_once();
         Self::new_in(&std::env::temp_dir())
     }
 
@@ -85,10 +90,25 @@ fn unique_name() -> String {
         .unwrap_or_default()
         .as_nanos();
     format!(
-        "lectern-cookie-reader-{}-{nanos}-{}",
+        "{PREFIX}{}-{nanos}-{}",
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::Relaxed)
     )
+}
+
+/// The id of the process that made the work folder `name`, or `None` if `name` is not
+/// exactly a name [`unique_name`] makes.
+pub(crate) fn owner_pid(name: &str) -> Option<u32> {
+    let mut parts = name.strip_prefix(PREFIX)?.split('-');
+    let pid = digits(parts.next()?)?.parse().ok()?;
+    digits(parts.next()?)?.parse::<u128>().ok()?;
+    digits(parts.next()?)?.parse::<u64>().ok()?;
+    parts.next().is_none().then_some(pid)
+}
+
+/// `part` if it is one or more ASCII digits and nothing else.
+fn digits(part: &str) -> Option<&str> {
+    (!part.is_empty() && part.bytes().all(|b| b.is_ascii_digit())).then_some(part)
 }
 
 #[cfg(test)]
@@ -114,6 +134,31 @@ mod tests {
         }));
         assert!(result.is_err());
         assert!(!kept.unwrap().exists());
+    }
+
+    #[test]
+    fn the_owner_is_read_back_from_a_made_name() {
+        assert_eq!(owner_pid(&unique_name()), Some(std::process::id()));
+        assert_eq!(
+            owner_pid("lectern-cookie-reader-42-1792103148685754000-5"),
+            Some(42)
+        );
+    }
+
+    #[test]
+    fn any_other_name_has_no_owner() {
+        for name in [
+            "lectern-cookie-reader-42-1-",
+            "lectern-cookie-reader-42-1",
+            "lectern-cookie-reader-42-1-5-6",
+            "lectern-cookie-reader-+42-1-5",
+            "lectern-cookie-reader-x-1-5",
+            "lectern-cookie-reader-99999999999-1-5",
+            "other-42-1-5",
+            "",
+        ] {
+            assert_eq!(owner_pid(name), None, "{name}");
+        }
     }
 
     #[test]
