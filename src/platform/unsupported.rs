@@ -1,4 +1,4 @@
-//! Platforms that are not supported yet. Windows is planned (issue #8).
+//! Platforms that are not supported: anything but macOS and Windows.
 
 use std::path::PathBuf;
 
@@ -29,7 +29,7 @@ pub(crate) fn is_protected(_browser: Browser) -> bool {
 /// The error that names the browser and says only macOS is supported for now.
 fn unsupported(browser: Browser) -> Error {
     Error::Unsupported(format!(
-        "reading {} on this operating system (only macOS for now)",
+        "reading {} on this operating system (only macOS and Windows)",
         browser.name()
     ))
 }

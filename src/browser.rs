@@ -43,6 +43,24 @@ pub(crate) struct MacOs {
     pub(crate) protected: bool,
 }
 
+/// The Windows folder a browser's data folder is in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AppData {
+    /// `%LOCALAPPDATA%`, for example `C:\Users\<name>\AppData\Local`.
+    Local,
+    /// `%APPDATA%`, for example `C:\Users\<name>\AppData\Roaming`.
+    Roaming,
+}
+
+/// Where a browser keeps its data on Windows.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Windows {
+    /// The folder the data folder is in.
+    pub(crate) base: AppData,
+    /// The folder that holds the profiles, relative to `base`, with `\` between folders.
+    pub(crate) data_dir: &'static str,
+}
+
 /// One browser's entry in the catalog.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Spec {
@@ -56,6 +74,9 @@ pub(crate) struct Spec {
     pub(crate) layout: ProfileLayout,
     /// Its macOS details, or `None` when it does not exist on macOS.
     pub(crate) macos: Option<MacOs>,
+    /// Its Windows details, or `None` when it does not exist on Windows or is not
+    /// supported there yet.
+    pub(crate) windows: Option<Windows>,
 }
 
 /// A browser this crate knows how to read. Get one with [`Browser::by_id`], or go through

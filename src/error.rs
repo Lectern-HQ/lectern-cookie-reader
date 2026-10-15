@@ -20,6 +20,9 @@ pub enum Error {
         /// The reason from the operating system or SQLite.
         reason: String,
     },
+    /// The running browser keeps its cookie database locked, so it cannot be copied
+    /// (Chrome and Edge on Windows). Closing the browser releases it.
+    DatabaseLocked(PathBuf),
     /// The copied cookie database could be opened but not queried (unexpected layout).
     DatabaseQuery(String),
     /// The private temporary folder could not be created or written.
@@ -75,6 +78,11 @@ impl fmt::Display for Error {
                     path.display()
                 )
             }
+            Error::DatabaseLocked(path) => write!(
+                f,
+                "the browser keeps its cookie database {} locked; close the browser and try again",
+                path.display()
+            ),
             Error::DatabaseQuery(reason) => write!(f, "cannot query cookie database: {reason}"),
             Error::WorkFolder { path, reason } => {
                 write!(
@@ -130,6 +138,7 @@ mod tests {
             (Error::InvalidHost("a b".into()), "a b"),
             (Error::InvalidLink("only https".into()), "only https"),
             (Error::DatabaseNotFound(path()), "/tmp/Cookies"),
+            (Error::DatabaseLocked(path()), "close the browser"),
             (
                 Error::DatabaseUnreadable {
                     path: path(),

@@ -253,7 +253,14 @@ mod tests {
         assert!(profile.path.ends_with("com.operasoftware.Opera"));
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    #[test]
+    fn the_default_chrome_profile_is_under_local_app_data() {
+        let profile = browser("chrome").default_profile().unwrap();
+        assert!(profile.path.ends_with(r"Google\Chrome\User Data\Default"));
+    }
+
+    #[cfg(not(any(target_os = "macos", windows)))]
     #[test]
     fn other_systems_are_reported_as_unsupported() {
         assert!(matches!(
