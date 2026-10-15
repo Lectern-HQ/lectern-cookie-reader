@@ -113,6 +113,15 @@ cargo test
 cargo llvm-cov --fail-under-lines 90   # coverage, needs cargo-llvm-cov
 ```
 
+To check a real computer by hand, without ever printing a cookie value:
+
+```bash
+cargo run --example probe -- mediaserver.unige.ch                     # every browser: profiles, logins, skipped, suggestion
+cargo run --example probe -- mediaserver.unige.ch --read dia          # cookie names of one browser (may ask for the Keychain)
+cargo run --example probe -- mediaserver.unige.ch --read safari --profile-dir <folder of a picked Cookies.binarycookies>
+cargo run --example probe -- mediaserver.unige.ch --read chrome --cookie-file   # also writes cookies.txt and waits
+```
+
 Tests use generated databases and test keys only, never real cookies.
 
 ## Licence
