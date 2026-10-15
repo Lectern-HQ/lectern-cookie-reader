@@ -3,6 +3,9 @@
 //! It is the most sensitive file Lectern creates, so it is written into a folder only the
 //! user can open, readable only by the user, and deleted with its folder when the
 //! [`CookieFile`] goes out of scope: after success, after an error and after a panic.
+//! A killed process or a quit through `process::exit` drops nothing: then
+//! [`crate::remove_work_folders`] on the way out, [`crate::clean_up_on_signals`], or
+//! [`crate::remove_leftovers`] at the next start remove it.
 
 use std::fs::{File, OpenOptions};
 use std::io::Write;
