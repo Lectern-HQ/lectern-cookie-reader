@@ -130,8 +130,7 @@ mod tests {
     fn access_list(path: &Path) -> String {
         let name = wide(path.as_os_str());
         let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
-        let mut text: PWSTR = std::ptr::null_mut();
-        // SAFETY: test helper; every pointer Windows returns is freed once.
+        // SAFETY: test helper; the descriptor Windows returns is freed by `to_sddl`.
         unsafe {
             assert_eq!(
                 GetNamedSecurityInfoW(
@@ -146,6 +145,43 @@ mod tests {
                 ),
                 0
             );
+            to_sddl(descriptor)
+        }
+    }
+
+    /// How SDDL text names the current user: its SID, or an alias such as `LA` for the
+    /// built-in administrator, as Windows writes it back.
+    fn user_in_sddl() -> String {
+        let sddl = wide(OsStr::new(&format!(
+            "D:(A;;FA;;;{})",
+            current_user_sid().unwrap()
+        )));
+        let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+        // SAFETY: test helper; the descriptor is freed by `to_sddl`.
+        let text = unsafe {
+            assert_ne!(
+                ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    sddl.as_ptr(),
+                    SDDL_REVISION_1,
+                    &mut descriptor,
+                    std::ptr::null_mut(),
+                ),
+                0
+            );
+            to_sddl(descriptor)
+        };
+        let start = text.rfind(";;;").unwrap() + 3;
+        text[start..text.len() - 1].to_owned()
+    }
+
+    /// The access list in `descriptor` as SDDL text. Frees `descriptor`.
+    ///
+    /// # Safety
+    /// `descriptor` must come from Windows, allocated with LocalAlloc.
+    unsafe fn to_sddl(descriptor: PSECURITY_DESCRIPTOR) -> String {
+        let mut text: PWSTR = std::ptr::null_mut();
+        // SAFETY: the caller guarantees `descriptor`; `text` is freed once.
+        unsafe {
             assert_ne!(
                 ConvertSecurityDescriptorToStringSecurityDescriptorW(
                     descriptor,
@@ -170,18 +206,18 @@ mod tests {
         create_owner_only_dir(&parent).unwrap();
         let file = parent.join("cookies.txt");
         std::fs::write(&file, "x").unwrap();
-        let sid = current_user_sid().unwrap();
+        let user = user_in_sddl();
         let folder_acl = access_list(&parent);
         let file_acl = access_list(&file);
         let _ = std::fs::remove_dir_all(&parent);
 
-        assert!(sid.starts_with("S-1-"), "{sid}");
+        assert!(current_user_sid().unwrap().starts_with("S-1-"));
         // The folder inherits nothing (P); the file inherits the folder's one entry (ID).
         assert!(folder_acl.starts_with("D:P"), "{folder_acl}");
         assert!(file_acl.contains(";ID;"), "{file_acl}");
         for acl in [&folder_acl, &file_acl] {
             assert_eq!(acl.matches('(').count(), 1, "one entry only: {acl}");
-            assert!(acl.contains(&format!(";FA;;;{sid})")), "{acl}");
+            assert!(acl.contains(&format!(";FA;;;{user})")), "{acl} for {user}");
         }
     }
 
