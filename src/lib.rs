@@ -35,6 +35,7 @@ mod default_browser;
 mod domain;
 mod engine_store;
 mod error;
+mod files;
 mod firefox;
 mod logins;
 mod netscape;

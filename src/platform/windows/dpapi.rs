@@ -13,7 +13,7 @@ use crate::{Error, Result};
 /// if the data was protected for another user or is damaged.
 pub(crate) fn unprotect(protected: &[u8]) -> Result<Zeroizing<Vec<u8>>> {
     let input = CRYPT_INTEGER_BLOB {
-        cbData: u32::try_from(protected.len()).map_err(|_| Error::KeyUnavailable(-1))?,
+        cbData: u32::try_from(protected.len()).map_err(|_| Error::InvalidKey)?,
         pbData: protected.as_ptr().cast_mut(),
     };
     let mut output = CRYPT_INTEGER_BLOB {

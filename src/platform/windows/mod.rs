@@ -7,6 +7,7 @@ mod owner_only;
 
 use std::path::PathBuf;
 
+use windows_sys::Win32::Foundation::ERROR_SHARING_VIOLATION;
 use zeroize::Zeroizing;
 
 use crate::browser::{AppData, Windows};
@@ -48,16 +49,19 @@ pub(crate) fn user_data_dir(browser: Browser) -> Result<PathBuf> {
 pub(crate) fn chromium_key(browser: Browser) -> Result<ChromiumKey> {
     let protected = local_state::read_protected_key(&user_data_dir(browser)?)?;
     let key = dpapi::unprotect(&protected)?;
-    let key: [u8; 32] = key
-        .as_slice()
-        .try_into()
-        .map_err(|_| Error::KeyUnavailable(-1))?;
+    let key: [u8; 32] = key.as_slice().try_into().map_err(|_| Error::InvalidKey)?;
     Ok(ChromiumKey::Gcm(Zeroizing::new(key)))
 }
 
 /// Always `None` for now: the default browser is not read on Windows yet.
 pub(crate) fn default_browser() -> Option<DefaultBrowser> {
     None
+}
+
+/// Whether the read failed because another program, such as a running Chrome, opened the
+/// file without sharing it.
+pub(crate) fn is_locked(error: &std::io::Error) -> bool {
+    u32::try_from(error.raw_os_error().unwrap_or_default()) == Ok(ERROR_SHARING_VIOLATION)
 }
 
 /// Always `false`: no browser folder this crate reads on Windows is protected.
@@ -93,6 +97,9 @@ mod tests {
             );
         }
         assert!(!is_protected(browser("chrome")));
+        let sharing = std::io::Error::from_raw_os_error(ERROR_SHARING_VIOLATION as i32);
+        assert!(is_locked(&sharing));
+        assert!(!is_locked(&std::io::Error::other("disk full")));
         assert!(default_browser().is_none());
         assert!(matches!(
             chromium_key(browser("dia")),

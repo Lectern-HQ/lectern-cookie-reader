@@ -8,6 +8,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use zeroize::Zeroizing;
 
+use crate::files::{existing, unreadable};
 use crate::{Error, Result};
 
 /// The file's name in the browser's data folder.
@@ -19,26 +20,14 @@ const DPAPI_PREFIX: &[u8] = b"DPAPI";
 /// `data_dir`. A browser that never ran has no such file: [`Error::KeyNotFound`].
 pub(crate) fn read_protected_key(data_dir: &Path) -> Result<Zeroizing<Vec<u8>>> {
     let path = data_dir.join(FILE_NAME);
-    let text = match std::fs::read_to_string(&path) {
-        Ok(text) => Zeroizing::new(text),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(Error::KeyNotFound),
-        Err(e) => {
-            return Err(Error::DatabaseUnreadable {
-                path,
-                reason: e.to_string(),
-            });
-        }
-    };
-    protected_key(&text, &path)
+    let text = existing(std::fs::read_to_string(&path), &path)?.ok_or(Error::KeyNotFound)?;
+    protected_key(&Zeroizing::new(text), &path)
 }
 
 /// The DPAPI-protected key in `text`, the content of the `Local State` file at `path`.
 /// `path` only names the file in errors.
 fn protected_key(text: &str, path: &Path) -> Result<Zeroizing<Vec<u8>>> {
-    let unreadable = |reason: &str| Error::DatabaseUnreadable {
-        path: path.to_owned(),
-        reason: reason.to_owned(),
-    };
+    let unreadable = |reason: &str| unreadable(path, reason);
     let state: serde_json::Value =
         serde_json::from_str(text).map_err(|_| unreadable("not valid JSON"))?;
     let encoded = state
@@ -85,9 +74,10 @@ mod tests {
         assert_eq!(read_protected_key(data.path()).unwrap().as_slice(), [7]);
         let folder = data.path().join("folder");
         std::fs::create_dir_all(folder.join(FILE_NAME)).unwrap();
+        // A folder is unreadable as a file on macOS, and access is denied on Windows.
         assert!(matches!(
             read_protected_key(&folder),
-            Err(Error::DatabaseUnreadable { .. })
+            Err(Error::DatabaseUnreadable { .. } | Error::PermissionNeeded(_))
         ));
     }
 

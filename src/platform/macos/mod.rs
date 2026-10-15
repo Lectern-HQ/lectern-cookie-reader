@@ -35,6 +35,11 @@ pub(crate) fn is_protected(browser: Browser) -> bool {
     macos(browser).is_ok_and(|m| m.protected)
 }
 
+/// Always `false`: macOS does not lock files against reading.
+pub(crate) fn is_locked(_error: &std::io::Error) -> bool {
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -51,6 +56,7 @@ mod tests {
         assert!(is_protected(browser("safari")));
         assert!(!is_protected(browser("dia")));
         assert!(!is_protected(browser("firefox")));
+        assert!(!is_locked(&std::io::Error::from_raw_os_error(32)));
     }
 
     #[test]

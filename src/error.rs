@@ -42,6 +42,8 @@ pub enum Error {
     PermissionNeeded(PathBuf),
     /// The browser's key was not found (for example the browser was never opened).
     KeyNotFound,
+    /// The browser's stored key does not have the expected size or format.
+    InvalidKey,
     /// Reading the key failed for another reason (operating system error code).
     KeyUnavailable(i32),
     /// One cookie could not be decrypted. Only its name is given, never its value.
@@ -108,6 +110,7 @@ impl fmt::Display for Error {
                 path.display()
             ),
             Error::KeyNotFound => write!(f, "the browser's key was not found"),
+            Error::InvalidKey => write!(f, "the browser's key does not have the expected format"),
             Error::KeyUnavailable(code) => {
                 write!(f, "the browser's key is not available (error {code})")
             }
@@ -172,7 +175,8 @@ mod tests {
             (Error::KeyAccessDenied, "denied"),
             (Error::PermissionNeeded(path()), "/tmp/Cookies"),
             (Error::KeyNotFound, "not found"),
-            (Error::KeyUnavailable(-1), "-1"),
+            (Error::InvalidKey, "format"),
+            (Error::KeyUnavailable(-25308), "-25308"),
             (
                 Error::DecryptionFailed {
                     cookie_name: "session".into(),

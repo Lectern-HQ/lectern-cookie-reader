@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::browser::ProfileLayout;
 use crate::engine_store::has_database;
+use crate::files::existing;
 use crate::firefox::profiles_ini::{self, IniProfile};
 use crate::{Browser, Error, Result, platform};
 
@@ -96,19 +97,6 @@ fn read_ini(ini: &Path, data_dir: &Path) -> Result<Vec<IniProfile>> {
     Ok(existing(std::fs::read_to_string(ini), ini)?
         .map(|text| profiles_ini::parse(&text, data_dir))
         .unwrap_or_default())
-}
-
-/// `None` for a file or folder that does not exist, the value if it was read, and an
-/// error naming `path` otherwise.
-fn existing<T>(read: std::io::Result<T>, path: &Path) -> Result<Option<T>> {
-    match read {
-        Ok(value) => Ok(Some(value)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(Error::DatabaseUnreadable {
-            path: path.to_owned(),
-            reason: e.to_string(),
-        }),
-    }
 }
 
 #[cfg(test)]

@@ -25,6 +25,11 @@ pub(crate) fn is_protected(_browser: Browser) -> bool {
     false
 }
 
+/// Always `false`: no lock is recognised on this system.
+pub(crate) fn is_locked(_error: &std::io::Error) -> bool {
+    false
+}
+
 /// The error that names the browser and says only macOS is supported for now.
 fn unsupported(browser: Browser) -> Error {
     Error::Unsupported(format!(
