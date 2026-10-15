@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::Once;
 
 use crate::platform;
-use crate::private_dir::owner_pid;
+use crate::private_dir::{owner_pid, remove_folders};
 
 /// Removes the work folders that processes which are no longer running left in the system's
 /// temporary folder, and returns how many it removed.
@@ -37,11 +37,12 @@ fn remove_leftovers_in(parent: &Path, is_running: impl Fn(u32) -> Option<bool>) 
     let Ok(entries) = fs::read_dir(parent) else {
         return 0;
     };
-    entries
-        .flatten()
-        .filter(|entry| is_leftover(entry, &is_running))
-        .filter(|entry| fs::remove_dir_all(entry.path()).is_ok())
-        .count()
+    remove_folders(
+        entries
+            .flatten()
+            .filter(|entry| is_leftover(entry, &is_running))
+            .map(|entry| entry.path()),
+    )
 }
 
 /// Whether `entry` is a work folder of another process that has certainly ended.
@@ -58,11 +59,11 @@ fn is_leftover(entry: &DirEntry, is_running: impl Fn(u32) -> Option<bool>) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::private_dir::PrivateDir;
+    use crate::private_dir::{PrivateDir, folder_name};
 
     /// A work folder name for process `pid`, with a file inside.
     fn folder(parent: &Path, pid: u32) -> std::path::PathBuf {
-        let path = parent.join(format!("lectern-cookie-reader-{pid}-1792103148685754000-0"));
+        let path = parent.join(folder_name(pid, 1, 0));
         fs::create_dir(&path).unwrap();
         fs::write(path.join("cookies.txt"), "x").unwrap();
         path
@@ -97,7 +98,7 @@ mod tests {
         let parent = PrivateDir::new().unwrap();
         let other = parent.path().join("other-101-1-0");
         fs::create_dir(&other).unwrap();
-        let file = parent.path().join("lectern-cookie-reader-101-1-1");
+        let file = parent.path().join(folder_name(101, 1, 1));
         fs::write(&file, "x").unwrap();
         assert_eq!(remove_leftovers_in(parent.path(), |_| Some(false)), 0);
         assert!(other.exists() && file.exists());
@@ -110,7 +111,7 @@ mod tests {
         let target = parent.path().join("target");
         fs::create_dir(&target).unwrap();
         fs::write(target.join("kept"), "x").unwrap();
-        let link = parent.path().join("lectern-cookie-reader-101-1-2");
+        let link = parent.path().join(folder_name(101, 1, 2));
         std::os::unix::fs::symlink(&target, &link).unwrap();
         assert_eq!(remove_leftovers_in(parent.path(), |_| Some(false)), 0);
         assert!(target.join("kept").exists() && link.exists());

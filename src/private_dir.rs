@@ -12,7 +12,7 @@ use crate::{Error, Result};
 const ATTEMPTS: u32 = 8;
 
 /// The start of every work folder's name, followed by `{pid}-{nanos}-{counter}`.
-const PREFIX: &str = "lectern-cookie-reader-";
+const PREFIX: &str = concat!(env!("CARGO_PKG_NAME"), "-");
 
 /// A temporary folder that only the current user can open, removed when dropped.
 pub(crate) struct PrivateDir {
@@ -89,11 +89,26 @@ fn unique_name() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    format!(
-        "{PREFIX}{}-{nanos}-{}",
+    folder_name(
         std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
+        nanos,
+        COUNTER.fetch_add(1, Ordering::Relaxed),
     )
+}
+
+/// The work folder name for process `pid`, made at `nanos` with `counter`. The only place
+/// that writes the name format; [`owner_pid`] reads it back.
+pub(crate) fn folder_name(pid: u32, nanos: u128, counter: u64) -> String {
+    format!("{PREFIX}{pid}-{nanos}-{counter}")
+}
+
+/// Removes each folder in `paths` with everything in it, and returns how many it removed.
+/// A folder that cannot be removed, or is already gone, is not counted.
+pub(crate) fn remove_folders(paths: impl IntoIterator<Item = PathBuf>) -> usize {
+    paths
+        .into_iter()
+        .filter(|path| fs::remove_dir_all(path).is_ok())
+        .count()
 }
 
 /// The id of the process that made the work folder `name`, or `None` if `name` is not
@@ -139,26 +154,35 @@ mod tests {
     #[test]
     fn the_owner_is_read_back_from_a_made_name() {
         assert_eq!(owner_pid(&unique_name()), Some(std::process::id()));
-        assert_eq!(
-            owner_pid("lectern-cookie-reader-42-1792103148685754000-5"),
-            Some(42)
-        );
+        assert_eq!(owner_pid(&folder_name(42, 1, 5)), Some(42));
     }
 
     #[test]
     fn any_other_name_has_no_owner() {
-        for name in [
-            "lectern-cookie-reader-42-1-",
-            "lectern-cookie-reader-42-1",
-            "lectern-cookie-reader-42-1-5-6",
-            "lectern-cookie-reader-+42-1-5",
-            "lectern-cookie-reader-x-1-5",
-            "lectern-cookie-reader-99999999999-1-5",
-            "other-42-1-5",
-            "",
-        ] {
-            assert_eq!(owner_pid(name), None, "{name}");
+        let malformed = [
+            "42-1-",
+            "42-1",
+            "42-1-5-6",
+            "+42-1-5",
+            "x-1-5",
+            "99999999999-1-5",
+        ];
+        for name in malformed.map(|rest| format!("{PREFIX}{rest}")) {
+            assert_eq!(owner_pid(&name), None, "{name}");
         }
+        assert_eq!(owner_pid("other-42-1-5"), None);
+        assert_eq!(owner_pid(""), None);
+    }
+
+    #[test]
+    fn removed_folders_are_counted_once() {
+        let parent = PrivateDir::new().unwrap();
+        let folder = parent.path().join("a");
+        fs::create_dir(&folder).unwrap();
+        fs::write(folder.join("file"), "x").unwrap();
+        let missing = parent.path().join("missing");
+        assert_eq!(remove_folders([folder.clone(), missing]), 1);
+        assert!(!folder.exists());
     }
 
     #[test]
