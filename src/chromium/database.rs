@@ -96,6 +96,27 @@ impl CookieDb {
         Ok(last_access.map(chromium_to_unix))
     }
 
+    /// Whether an unexpired cookie stored under one of `domains` uses app-bound encryption.
+    /// Nothing is decrypted, so this can run before asking for the browser's key.
+    pub(crate) fn uses_app_bound_encryption(
+        &self,
+        domains: &[String],
+        now_unix: i64,
+    ) -> Result<bool> {
+        let sql = format!(
+            "SELECT EXISTS(SELECT 1 FROM cookies WHERE {} AND substr(encrypted_value, 1, {}) = ?{})",
+            matching_rows(domains.len()),
+            crypto::APP_BOUND_PREFIX.len(),
+            domains.len() + 2
+        );
+        let now = unix_to_chromium(now_unix);
+        let mut params = time_and_domains(&now, domains);
+        params.push(&crypto::APP_BOUND_PREFIX);
+        self.conn
+            .query_row(&sql, params.as_slice(), |row| row.get(0))
+            .map_err(query_error)
+    }
+
     /// When the browser last sent any cookie, for any site, as Unix seconds: a sign of how
     /// recently the profile was used. `None` for a profile without cookies.
     pub(crate) fn last_active(&self) -> Result<Option<i64>> {
@@ -237,6 +258,29 @@ mod tests {
             .read(&candidate_domains("www.example.com"), &key(), NOW)
             .unwrap_err();
         assert!(matches!(err, Error::HostHashMismatch { cookie_name } if cookie_name == "session"));
+    }
+
+    #[test]
+    fn app_bound_values_of_the_site_are_found_without_decrypting() {
+        let dir = PrivateDir::new().unwrap();
+        let path = create_db(
+            dir.path(),
+            "24",
+            &[
+                row(".example.com", "plain", None),
+                row(".other.com", "bound", None).value(b"v20sealed"),
+                row(".example.com", "old", Some(NOW - 1)).value(b"v20sealed"),
+            ],
+        );
+        let db = CookieDb::open(&path).unwrap();
+        assert!(
+            !db.uses_app_bound_encryption(&candidate_domains("example.com"), NOW)
+                .unwrap()
+        );
+        assert!(
+            db.uses_app_bound_encryption(&candidate_domains("other.com"), NOW)
+                .unwrap()
+        );
     }
 
     #[test]

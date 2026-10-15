@@ -75,6 +75,11 @@ impl Row<'_> {
         self.last_used = unix_secs;
         self
     }
+
+    pub(crate) fn value(mut self, stored: &[u8]) -> Self {
+        self.value = stored.to_vec();
+        self
+    }
 }
 
 /// Writes a generated cookie database named `Cookies` into `folder`.
