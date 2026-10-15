@@ -2,7 +2,6 @@
 //! Each case runs in a child process (this test binary again), so that removing every
 //! folder of the process never touches the folders of other tests.
 
-use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
 
 use lectern_cookie_reader::{CookieFile, clean_up_on_signals, remove_work_folders};
@@ -52,6 +51,7 @@ fn the_exit_handler_removes_every_work_folder() {
 fn a_termination_signal_removes_the_folders_and_still_ends_the_process() {
     use std::io::{BufRead, BufReader};
     use std::os::unix::process::ExitStatusExt;
+    use std::path::PathBuf;
 
     let mut child = start("signals");
     // libtest prints `test child ... ` before the line on the same line.
