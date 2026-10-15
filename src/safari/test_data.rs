@@ -1,6 +1,6 @@
 //! Generated Safari cookie files for tests, never real cookies.
 
-pub(crate) use crate::chromium::test_vectors::NOW;
+pub(crate) use crate::clock::tests::NOW;
 
 /// Seconds from 1970 to 2001, where Safari counts time from.
 const MAC_EPOCH: i64 = 978_307_200;

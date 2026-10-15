@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-pub(crate) use crate::chromium::test_vectors::NOW;
+pub(crate) use crate::clock::tests::NOW;
 
 /// The schema of a Firefox cookie database, shared with the tests of the public API.
 const SCHEMA: &str = include_str!("../../tests/fixtures/firefox_cookies.sql");

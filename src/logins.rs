@@ -267,7 +267,7 @@ mod tests {
         let safari_dir = dia.path().join("safari");
         std::fs::create_dir(&safari_dir).unwrap();
         // If the folder were read, this file would fail the scan as an invalid cookie file.
-        std::fs::write(safari_dir.join("Cookies.binarycookies"), "x").unwrap();
+        std::fs::write(safari_dir.join(crate::safari::database::DATABASE_FILE), "x").unwrap();
         let data_dirs = [
             (browser("dia"), dia.path().to_owned()),
             (browser("safari"), safari_dir.clone()),

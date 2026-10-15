@@ -1,11 +1,9 @@
 //! The public lookup: the cookies of one website in one browser profile.
 
-use crate::chromium;
-use crate::chromium::crypto::ChromiumKey;
 use crate::clock::now_unix;
 use crate::domain::domains_for;
-use crate::{Browser, Cookie, Engine, Profile, Result, platform};
-use crate::{firefox, safari};
+use crate::engine_store::StoreCopy;
+use crate::{Cookie, Profile, Result, platform};
 
 /// Reads the unexpired cookies that a browser would send to `host`.
 ///
@@ -29,161 +27,10 @@ use crate::{firefox, safari};
 /// app to read; without that permission the error is [`crate::Error::PermissionNeeded`].
 pub fn read_cookies(profile: &Profile, host: &str) -> Result<Vec<Cookie>> {
     let domains = domains_for(host)?;
-    match profile.browser.engine() {
-        Engine::Chromium => read_chromium(profile, &domains, now_unix(), platform::chromium_key),
-        Engine::Firefox => read_firefox(profile, &domains, now_unix()),
-        Engine::Safari => read_safari(profile, &domains, now_unix()),
-    }
-}
-
-/// `chromium_key` is a parameter so tests can run every step with a test key.
-fn read_chromium(
-    profile: &Profile,
-    domains: &[String],
-    now_unix: i64,
-    chromium_key: impl FnOnce(Browser) -> Result<ChromiumKey>,
-) -> Result<Vec<Cookie>> {
-    let copy = chromium::database::ProfileCopy::of(&profile.path)?;
-    if copy.db().last_used_for(domains, now_unix)?.is_none() {
-        return Ok(Vec::new());
-    }
-    if copy.db().uses_app_bound_encryption(domains, now_unix)? {
-        return Err(crate::Error::AppBoundEncryption {
-            browser: profile.browser.name().to_owned(),
-        });
-    }
-    let key = chromium_key(profile.browser)?;
-    copy.db().read(domains, &key, now_unix)
-}
-
-/// Firefox family values are stored without encryption: no key, no permission dialog.
-fn read_firefox(profile: &Profile, domains: &[String], now_unix: i64) -> Result<Vec<Cookie>> {
-    firefox::database::ProfileCopy::of(&profile.path)?
-        .db()
-        .read(domains, now_unix)
-}
-
-/// Safari values are stored without encryption, but macOS protects the file: without the
-/// user's permission this is [`crate::Error::PermissionNeeded`].
-fn read_safari(profile: &Profile, domains: &[String], now_unix: i64) -> Result<Vec<Cookie>> {
-    safari::database::CookieFileData::of(&profile.path)?.read(domains, now_unix)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::Error;
-    use crate::browser::tests::browser;
-    use crate::chromium::test_vectors::{NOW, create_db, key, row};
-    use crate::domain::candidate_domains;
-    use crate::private_dir::PrivateDir;
-
-    fn dia_profile(dir: &PrivateDir) -> Profile {
-        Profile {
-            browser: browser("dia"),
-            name: "Test".into(),
-            path: dir.path().to_owned(),
-        }
-    }
-
-    #[test]
-    fn decrypts_the_matching_cookies_with_the_browser_key() {
-        let dir = PrivateDir::new().unwrap();
-        create_db(dir.path(), "24", &[row(".example.com", "session", None)]);
-        let mut asked_for = None;
-        let cookies = read_chromium(
-            &dia_profile(&dir),
-            &candidate_domains("example.com"),
-            NOW,
-            |browser| {
-                asked_for = Some(browser);
-                Ok(key())
-            },
-        )
-        .unwrap();
-        assert_eq!(asked_for, Some(browser("dia")));
-        assert_eq!(cookies.len(), 1);
-        assert_eq!(cookies[0].value.expose(), "hello-world");
-    }
-
-    #[test]
-    fn the_key_is_not_requested_without_a_matching_cookie() {
-        let dir = PrivateDir::new().unwrap();
-        create_db(dir.path(), "24", &[row(".other.com", "session", None)]);
-        let cookies = read_chromium(
-            &dia_profile(&dir),
-            &candidate_domains("example.com"),
-            NOW,
-            |_| panic!("the key must not be requested"),
-        )
-        .unwrap();
-        assert!(cookies.is_empty());
-    }
-
-    #[test]
-    fn firefox_values_are_read_without_a_key() {
-        use crate::firefox::test_data;
-        let dir = PrivateDir::new().unwrap();
-        test_data::create_db(
-            dir.path(),
-            16,
-            &[test_data::row(".example.com", "session", NOW + 60)],
-        );
-        let profile = Profile {
-            browser: browser("firefox"),
-            name: "default-release".into(),
-            path: dir.path().to_owned(),
-        };
-        let cookies = read_firefox(&profile, &candidate_domains("example.com"), NOW).unwrap();
-        assert_eq!(cookies.len(), 1);
-        assert_eq!(cookies[0].value.expose(), "value-of-session");
-    }
-
-    #[test]
-    fn safari_values_are_read_without_a_key() {
-        use crate::safari::test_data::{Generated, file, page};
-        let dir = PrivateDir::new().unwrap();
-        let data = file(&[page(&[Generated::new(".example.com", "session", NOW + 60)])]);
-        std::fs::write(dir.path().join("Cookies.binarycookies"), data).unwrap();
-        let profile = Profile {
-            browser: browser("safari"),
-            name: "Default".into(),
-            path: dir.path().to_owned(),
-        };
-        let cookies = read_safari(&profile, &candidate_domains("example.com"), NOW).unwrap();
-        assert_eq!(cookies.len(), 1);
-        assert_eq!(cookies[0].value.expose(), "value-of-session");
-    }
-
-    #[test]
-    fn app_bound_values_are_reported_before_asking_for_the_key() {
-        let dir = PrivateDir::new().unwrap();
-        create_db(
-            dir.path(),
-            "24",
-            &[row(".example.com", "session", None).value(b"v20sealed")],
-        );
-        let err = read_chromium(
-            &dia_profile(&dir),
-            &candidate_domains("example.com"),
-            NOW,
-            |_| panic!("the key must not be requested"),
-        )
-        .unwrap_err();
-        assert!(matches!(err, Error::AppBoundEncryption { browser } if browser == "Dia"));
-    }
-
-    #[test]
-    fn a_denied_key_is_passed_on() {
-        let dir = PrivateDir::new().unwrap();
-        create_db(dir.path(), "24", &[row(".example.com", "session", None)]);
-        let err = read_chromium(
-            &dia_profile(&dir),
-            &candidate_domains("example.com"),
-            NOW,
-            |_| Err(Error::KeyAccessDenied),
-        )
-        .unwrap_err();
-        assert!(matches!(err, Error::KeyAccessDenied));
-    }
+    StoreCopy::of(profile)?.read(
+        profile.browser,
+        &domains,
+        now_unix(),
+        platform::chromium_key,
+    )
 }

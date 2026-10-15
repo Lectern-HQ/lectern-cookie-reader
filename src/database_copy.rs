@@ -1,11 +1,8 @@
-//! A private copy of a browser's SQLite cookie database, and the helpers every engine uses
-//! to query it. The browser's own file is never opened, so a running browser is not
-//! disturbed.
+//! A private copy of a browser's SQLite cookie database. The browser's own file is never
+//! opened, so a running browser is not disturbed.
 
 use std::fs;
 use std::path::{Path, PathBuf};
-
-use rusqlite::ToSql;
 
 use crate::files::read_error;
 use crate::private_dir::PrivateDir;
@@ -71,27 +68,6 @@ fn copy_file(from: &Path, to: &Path) -> Result<()> {
         .map_err(|e| read_error(from, e))
 }
 
-/// A database error as this crate's error, with SQLite's reason.
-pub(crate) fn query_error(error: rusqlite::Error) -> Error {
-    Error::DatabaseQuery(error.to_string())
-}
-
-/// SQL placeholders `?first`, `?first+1`, ... for `count` values, separated by commas.
-/// Values are always passed as parameters, never written into the SQL text.
-pub(crate) fn placeholders(first: usize, count: usize) -> String {
-    (first..first + count)
-        .map(|i| format!("?{i}"))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-/// A cookie query's parameters in order: the current time as `?1`, then each domain.
-pub(crate) fn time_and_domains<'a>(now: &'a i64, domains: &'a [String]) -> Vec<&'a dyn ToSql> {
-    let mut params: Vec<&dyn ToSql> = vec![now];
-    params.extend(domains.iter().map(|d| d as &dyn ToSql));
-    params
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,11 +105,5 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), "x");
         drop(copy);
         assert!(!path.exists());
-    }
-
-    #[test]
-    fn placeholders_are_numbered_from_the_first() {
-        assert_eq!(placeholders(2, 3), "?2, ?3, ?4");
-        assert_eq!(placeholders(1, 0), "");
     }
 }
