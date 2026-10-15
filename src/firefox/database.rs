@@ -19,8 +19,8 @@ const DATABASE_FILE: &str = "cookies.sqlite";
 /// has the columns this crate reads.
 pub(crate) const MIN_SCHEMA_VERSION: i64 = 12;
 /// Newest schema version this crate has been checked against. Newer versions are refused
-/// instead of risking wrong values.
-pub(crate) const MAX_SCHEMA_VERSION: i64 = 16;
+/// instead of risking wrong values. Version 17 only added the `updateTime` column.
+pub(crate) const MAX_SCHEMA_VERSION: i64 = 17;
 /// From this version on (Firefox 142), `expiry` is in milliseconds instead of seconds.
 const MILLISECOND_EXPIRY_VERSION: i64 = 16;
 /// `lastAccessed` is in microseconds since 1970.
@@ -203,6 +203,17 @@ mod tests {
     }
 
     #[test]
+    fn schema_version_17_reads_like_16() {
+        let dir = PrivateDir::new().unwrap();
+        let path = create_db(dir.path(), 17, &[row(".example.com", "a", NOW + 60)]);
+        let cookies = CookieDb::open(&path)
+            .unwrap()
+            .read(&candidate_domains("example.com"), NOW)
+            .unwrap();
+        assert_eq!(cookies[0].expires, Some(NOW + 60));
+    }
+
+    #[test]
     fn expiry_is_in_seconds_before_schema_version_16() {
         let dir = PrivateDir::new().unwrap();
         let path = create_db(
@@ -270,7 +281,7 @@ mod tests {
 
     #[test]
     fn unknown_schema_versions_are_refused() {
-        for version in [11, 17] {
+        for version in [11, 18] {
             let dir = PrivateDir::new().unwrap();
             let path = create_db(dir.path(), version, &[]);
             assert!(matches!(
