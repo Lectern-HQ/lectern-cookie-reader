@@ -55,8 +55,7 @@ pub(crate) struct Row<'a> {
     value: Vec<u8>,
 }
 
-/// Fixed "now" for tests that read generated databases.
-pub(crate) const NOW: i64 = 1_800_000_000;
+pub(crate) use crate::clock::tests::NOW;
 
 /// A cookie whose value is the `V24` vector, encrypted for `.example.com`, last sent to
 /// the site 10 seconds before `NOW`.

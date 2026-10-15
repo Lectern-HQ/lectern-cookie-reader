@@ -1,5 +1,5 @@
-//! Reads cookie rows from a copy of a Chromium cookie database. The browser's own file is
-//! only ever copied, never opened, so a running browser is not disturbed.
+//! The Chromium cookie database: its schema for the shared SQLite store, and what only
+//! Chromium does, finding app-bound values and decrypting values with the browser's key.
 
 use std::path::{Path, PathBuf};
 
@@ -7,66 +7,43 @@ use rusqlite::Connection;
 
 use crate::chromium::crypto::{self, ChromiumKey};
 use crate::chromium::{chromium_to_unix, unix_to_chromium};
-use crate::database_copy::{DatabaseCopy, placeholders, query_error, time_and_domains};
-use crate::files::unreadable;
+use crate::sqlite_store::{Filter, Query, Schema, Store, query_error};
 use crate::{Cookie, Error, Result};
 
 /// The cookie database's file name in a Chromium profile folder.
 const DATABASE_FILE: &str = "Cookies";
 /// Since Chrome 96 on Windows the database is in this subfolder of the profile.
 const NETWORK_FOLDER: &str = "Network";
+/// The columns [`read`] builds a cookie from, in the order it reads them.
+const COOKIE_COLUMNS: &str =
+    "host_key, name, path, is_secure, is_httponly, has_expires, expires_utc, encrypted_value";
+/// The condition for a value with app-bound encryption; `?` is its version marker.
+const APP_BOUND_CONDITION: &str = "substr(encrypted_value, 1, 3) = ?";
 
-/// The cookie database of the Chromium profile in `profile_dir`: `Network\Cookies` where
-/// it exists (Windows), else `Cookies`.
-fn database_path(profile_dir: &Path) -> PathBuf {
-    let network = profile_dir.join(NETWORK_FOLDER).join(DATABASE_FILE);
-    if network.is_file() {
-        network
-    } else {
-        profile_dir.join(DATABASE_FILE)
-    }
-}
+/// The schema of a Chromium cookie database.
+pub(crate) struct ChromiumSchema;
 
-/// Whether `profile_dir` holds a Chromium cookie database.
-pub(crate) fn has_database(profile_dir: &Path) -> bool {
-    database_path(profile_dir).is_file()
-}
+/// A copied and opened Chromium cookie database.
+pub(crate) type ChromiumStore = Store<ChromiumSchema>;
 
-/// A profile's cookie database, copied into a private folder and opened. Dropping it
-/// closes the database, then deletes the copy with its folder.
-pub(crate) struct ProfileCopy {
-    /// The opened copy. Declared first, so it is closed before the copy is deleted.
-    db: CookieDb,
-    /// The copy in its private folder.
-    _copy: DatabaseCopy,
-}
+impl Schema for ChromiumSchema {
+    const TABLE: &'static str = "cookies";
+    const HOST: &'static str = "host_key";
+    const LAST_ACCESS: &'static str = "last_access_utc";
+    const SENDABLE: &'static str = "(has_expires = 0 OR expires_utc > ?1)";
 
-impl ProfileCopy {
-    /// Copies the cookie database of the profile in `profile_dir` and opens the copy.
-    pub(crate) fn of(profile_dir: &Path) -> Result<Self> {
-        let copy = DatabaseCopy::of(&database_path(profile_dir))?;
-        let db = CookieDb::open(copy.path())?;
-        Ok(Self { db, _copy: copy })
+    /// `Network\Cookies` where it exists (Windows), else `Cookies`.
+    fn database_path(profile_dir: &Path) -> PathBuf {
+        let network = profile_dir.join(NETWORK_FOLDER).join(DATABASE_FILE);
+        if network.is_file() {
+            network
+        } else {
+            profile_dir.join(DATABASE_FILE)
+        }
     }
 
-    /// The opened copy.
-    pub(crate) fn db(&self) -> &CookieDb {
-        &self.db
-    }
-}
-
-/// An opened database copy whose version this crate knows.
-pub(crate) struct CookieDb {
-    /// The open connection to the copy.
-    conn: Connection,
-    /// The database version, checked when opened.
-    version: i64,
-}
-
-impl CookieDb {
-    /// Opens a database copy and refuses versions this crate has not been checked against.
-    pub(crate) fn open(path: &Path) -> Result<Self> {
-        let conn = Connection::open(path).map_err(|e| unreadable(path, e))?;
+    /// The version in the `meta` table, stored as text.
+    fn version(conn: &Connection) -> Result<i64> {
         let version: String = conn
             .query_row("SELECT value FROM meta WHERE key = 'version'", [], |row| {
                 row.get(0)
@@ -76,112 +53,104 @@ impl CookieDb {
             .parse()
             .map_err(|_| Error::DatabaseQuery(format!("version {version:?} is not a number")))?;
         crypto::check_db_version(version)?;
-        Ok(Self { conn, version })
+        Ok(version)
     }
 
-    /// When the browser last sent an unexpired cookie stored under one of `domains`, as Unix
-    /// seconds, or `None` if there is no such cookie. Nothing is decrypted, so this can run
-    /// before asking the operating system for the browser's key.
-    pub(crate) fn last_used_for(&self, domains: &[String], now_unix: i64) -> Result<Option<i64>> {
-        let sql = format!(
-            "SELECT MAX(last_access_utc) FROM cookies WHERE {}",
-            matching_rows(domains.len())
-        );
-        let now = unix_to_chromium(now_unix);
-        let last_access: Option<i64> = self
-            .conn
-            .query_row(&sql, time_and_domains(&now, domains).as_slice(), |row| {
-                row.get(0)
-            })
-            .map_err(query_error)?;
-        Ok(last_access.map(chromium_to_unix))
+    fn now(_version: i64, now_unix: i64) -> i64 {
+        unix_to_chromium(now_unix)
     }
 
-    /// Whether an unexpired cookie stored under one of `domains` uses app-bound encryption.
-    /// Nothing is decrypted, so this can run before asking for the browser's key.
-    pub(crate) fn uses_app_bound_encryption(
-        &self,
-        domains: &[String],
-        now_unix: i64,
-    ) -> Result<bool> {
-        let sql = format!(
-            "SELECT EXISTS(SELECT 1 FROM cookies WHERE {} AND substr(encrypted_value, 1, {}) = ?{})",
-            matching_rows(domains.len()),
-            crypto::APP_BOUND_PREFIX.len(),
-            domains.len() + 2
-        );
-        let now = unix_to_chromium(now_unix);
-        let mut params = time_and_domains(&now, domains);
-        params.push(&crypto::APP_BOUND_PREFIX);
-        self.conn
-            .query_row(&sql, params.as_slice(), |row| row.get(0))
-            .map_err(query_error)
-    }
-
-    /// When the browser last sent any cookie, for any site, as Unix seconds: a sign of how
-    /// recently the profile was used. `None` for a profile without cookies.
-    pub(crate) fn last_active(&self) -> Result<Option<i64>> {
-        let last_access: Option<i64> = self
-            .conn
-            .query_row("SELECT MAX(last_access_utc) FROM cookies", [], |row| {
-                row.get(0)
-            })
-            .map_err(query_error)?;
-        Ok(last_access.map(chromium_to_unix))
-    }
-
-    /// Decrypts the unexpired cookies stored under one of `domains`.
-    ///
-    /// If one value cannot be decrypted, the whole read fails with that cookie's error.
-    /// A login with a cookie missing fails later in ways that are hard to explain, and a
-    /// value stored for another site must never be used.
-    pub(crate) fn read(
-        &self,
-        domains: &[String],
-        key: &ChromiumKey,
-        now_unix: i64,
-    ) -> Result<Vec<Cookie>> {
-        let sql = format!(
-            "SELECT host_key, name, path, is_secure, is_httponly, has_expires, expires_utc,
-                    encrypted_value
-             FROM cookies WHERE {}",
-            matching_rows(domains.len())
-        );
-        let now = unix_to_chromium(now_unix);
-        let mut statement = self.conn.prepare(&sql).map_err(query_error)?;
-        let mut rows = statement
-            .query(time_and_domains(&now, domains).as_slice())
-            .map_err(query_error)?;
-        let mut cookies = Vec::new();
-        while let Some(row) = rows.next().map_err(query_error)? {
-            let domain: String = row.get(0).map_err(query_error)?;
-            let name: String = row.get(1).map_err(query_error)?;
-            let has_expiry: bool = row.get(5).map_err(query_error)?;
-            let expiry: i64 = row.get(6).map_err(query_error)?;
-            let encrypted: Vec<u8> = row.get(7).map_err(query_error)?;
-            let value = crypto::decrypt_value(&encrypted, key, &domain, &name, self.version)?;
-            cookies.push(Cookie {
-                path: row.get(2).map_err(query_error)?,
-                secure: row.get(3).map_err(query_error)?,
-                http_only: row.get(4).map_err(query_error)?,
-                expires: has_expiry.then(|| chromium_to_unix(expiry)),
-                domain,
-                name,
-                value,
-            });
-        }
-        Ok(cookies)
+    fn last_access_to_unix(stored: i64) -> i64 {
+        chromium_to_unix(stored)
     }
 }
 
-/// SQL condition for unexpired rows under one of `domain_count` domains. Parameter `?1` is
-/// the current time, `?2` onwards are the domains. Values are always passed as parameters,
-/// never written into the SQL text.
-fn matching_rows(domain_count: usize) -> String {
-    format!(
-        "host_key IN ({}) AND (has_expires = 0 OR expires_utc > ?1)",
-        placeholders(2, domain_count)
-    )
+/// One row as stored, before its value is decrypted.
+struct Encrypted {
+    /// `host_key`.
+    domain: String,
+    /// `name`.
+    name: String,
+    /// `path`.
+    path: String,
+    /// `is_secure`.
+    secure: bool,
+    /// `is_httponly`.
+    http_only: bool,
+    /// `expires_utc` as Unix seconds, or `None` without `has_expires`.
+    expires: Option<i64>,
+    /// `encrypted_value`.
+    value: Vec<u8>,
+}
+
+impl Encrypted {
+    /// The cookie, with its value decrypted with `key` for a database of `db_version`.
+    fn decrypt(self, key: &ChromiumKey, db_version: i64) -> Result<Cookie> {
+        let value = crypto::decrypt_value(&self.value, key, &self.domain, &self.name, db_version)?;
+        Ok(Cookie {
+            domain: self.domain,
+            name: self.name,
+            value,
+            path: self.path,
+            secure: self.secure,
+            http_only: self.http_only,
+            expires: self.expires,
+        })
+    }
+}
+
+/// Whether a sendable cookie stored under one of `domains` uses app-bound encryption.
+/// Nothing is decrypted, so this can run before asking for the browser's key.
+pub(crate) fn uses_app_bound_encryption(
+    store: &ChromiumStore,
+    domains: &[String],
+    now_unix: i64,
+) -> Result<bool> {
+    let query = Query {
+        columns: "1",
+        domains,
+        now_unix,
+        filter: Some(Filter {
+            condition: APP_BOUND_CONDITION,
+            value: &crypto::APP_BOUND_PREFIX,
+        }),
+    };
+    Ok(!store.rows(&query, |_| Ok(()))?.is_empty())
+}
+
+/// Decrypts the sendable cookies stored under one of `domains`.
+///
+/// If one value cannot be decrypted, the whole read fails with that cookie's error. A
+/// login with a cookie missing fails later in ways that are hard to explain, and a value
+/// stored for another site must never be used.
+pub(crate) fn read(
+    store: &ChromiumStore,
+    domains: &[String],
+    key: &ChromiumKey,
+    now_unix: i64,
+) -> Result<Vec<Cookie>> {
+    let query = Query {
+        columns: COOKIE_COLUMNS,
+        domains,
+        now_unix,
+        filter: None,
+    };
+    let rows = store.rows(&query, |row| {
+        let has_expiry: bool = row.get(5)?;
+        let expiry: i64 = row.get(6)?;
+        Ok(Encrypted {
+            domain: row.get(0)?,
+            name: row.get(1)?,
+            path: row.get(2)?,
+            secure: row.get(3)?,
+            http_only: row.get(4)?,
+            expires: has_expiry.then(|| chromium_to_unix(expiry)),
+            value: row.get(7)?,
+        })
+    })?;
+    rows.into_iter()
+        .map(|row| row.decrypt(key, store.version()))
+        .collect()
 }
 
 #[cfg(test)]
@@ -192,9 +161,9 @@ mod tests {
     use crate::private_dir::PrivateDir;
 
     #[test]
-    fn reads_only_unexpired_cookies_of_the_requested_site() {
+    fn reads_only_sendable_cookies_of_the_requested_site() {
         let dir = PrivateDir::new().unwrap();
-        let path = create_db(
+        create_db(
             dir.path(),
             "24",
             &[
@@ -204,23 +173,24 @@ mod tests {
                 row("other.com", "foreign", Some(NOW + 60)),
             ],
         );
-        let db = CookieDb::open(&path).unwrap();
+        let store = ChromiumStore::of(dir.path()).unwrap();
         let domains = candidate_domains("www.example.com");
 
-        assert_eq!(db.last_used_for(&domains, NOW).unwrap(), Some(NOW - 10));
-        let mut cookies = db.read(&domains, &key(), NOW).unwrap();
+        assert_eq!(store.last_used_for(&domains, NOW).unwrap(), Some(NOW - 10));
+        let mut cookies = read(&store, &domains, &key(), NOW).unwrap();
         cookies.sort_by(|a, b| a.name.cmp(&b.name));
         let names: Vec<_> = cookies.iter().map(|c| c.name.as_str()).collect();
         assert_eq!(names, ["no-expiry", "session"]);
         assert_eq!(cookies[1].value.expose(), "hello-world");
         assert_eq!(cookies[1].expires, Some(NOW + 60));
+        assert!(cookies[1].secure && cookies[1].http_only);
         assert_eq!(cookies[0].expires, None);
     }
 
     #[test]
     fn last_activity_counts_every_site() {
         let dir = PrivateDir::new().unwrap();
-        let path = create_db(
+        create_db(
             dir.path(),
             "24",
             &[
@@ -228,43 +198,25 @@ mod tests {
                 row("other.com", "b", Some(NOW - 1)).last_used(NOW - 5),
             ],
         );
-        assert_eq!(
-            CookieDb::open(&path).unwrap().last_active().unwrap(),
-            Some(NOW - 5)
-        );
-        let empty = PrivateDir::new().unwrap();
-        let path = create_db(empty.path(), "24", &[]);
-        assert_eq!(CookieDb::open(&path).unwrap().last_active().unwrap(), None);
-    }
-
-    #[test]
-    fn a_site_without_cookies_is_reported_before_any_decryption() {
-        let dir = PrivateDir::new().unwrap();
-        let path = create_db(dir.path(), "24", &[row("other.com", "x", None)]);
-        let db = CookieDb::open(&path).unwrap();
-        assert!(
-            db.last_used_for(&candidate_domains("example.com"), NOW)
-                .unwrap()
-                .is_none()
-        );
+        let store = ChromiumStore::of(dir.path()).unwrap();
+        assert_eq!(store.last_active().unwrap(), Some(NOW - 5));
     }
 
     #[test]
     fn a_value_copied_from_another_site_fails_the_whole_read() {
         let dir = PrivateDir::new().unwrap();
         // The value was encrypted for ".example.com" but is stored under "www.example.com".
-        let path = create_db(dir.path(), "24", &[row("www.example.com", "session", None)]);
-        let db = CookieDb::open(&path).unwrap();
-        let err = db
-            .read(&candidate_domains("www.example.com"), &key(), NOW)
-            .unwrap_err();
+        create_db(dir.path(), "24", &[row("www.example.com", "session", None)]);
+        let store = ChromiumStore::of(dir.path()).unwrap();
+        let domains = candidate_domains("www.example.com");
+        let err = read(&store, &domains, &key(), NOW).unwrap_err();
         assert!(matches!(err, Error::HostHashMismatch { cookie_name } if cookie_name == "session"));
     }
 
     #[test]
     fn app_bound_values_of_the_site_are_found_without_decrypting() {
         let dir = PrivateDir::new().unwrap();
-        let path = create_db(
+        create_db(
             dir.path(),
             "24",
             &[
@@ -273,55 +225,46 @@ mod tests {
                 row(".example.com", "old", Some(NOW - 1)).value(b"v20sealed"),
             ],
         );
-        let db = CookieDb::open(&path).unwrap();
-        assert!(
-            !db.uses_app_bound_encryption(&candidate_domains("example.com"), NOW)
-                .unwrap()
-        );
-        assert!(
-            db.uses_app_bound_encryption(&candidate_domains("other.com"), NOW)
-                .unwrap()
-        );
-    }
-
-    #[test]
-    fn domains_are_parameters_not_sql() {
-        let dir = PrivateDir::new().unwrap();
-        let path = create_db(dir.path(), "24", &[row("example.com", "x", None)]);
-        let db = CookieDb::open(&path).unwrap();
-        let hostile = vec!["x' OR '1'='1".to_owned()];
-        assert!(db.last_used_for(&hostile, NOW).unwrap().is_none());
+        let store = ChromiumStore::of(dir.path()).unwrap();
+        let bound = |host| uses_app_bound_encryption(&store, &candidate_domains(host), NOW);
+        assert!(!bound("example.com").unwrap());
+        assert!(bound("other.com").unwrap());
     }
 
     #[test]
     fn the_network_folder_is_preferred() {
         let profile = PrivateDir::new().unwrap();
-        assert!(!has_database(profile.path()));
+        assert!(!ChromiumStore::has_database(profile.path()));
         assert_eq!(
-            database_path(profile.path()),
+            ChromiumSchema::database_path(profile.path()),
             profile.path().join("Cookies")
         );
         let network = profile.path().join("Network");
         std::fs::create_dir(&network).unwrap();
         create_db(&network, "24", &[row(".example.com", "a", None)]);
-        assert!(has_database(profile.path()));
-        assert_eq!(database_path(profile.path()), network.join("Cookies"));
-        let copy = ProfileCopy::of(profile.path()).unwrap();
-        assert!(
-            copy.db()
-                .last_used_for(&candidate_domains("example.com"), NOW)
-                .unwrap()
-                .is_some()
+        assert!(ChromiumStore::has_database(profile.path()));
+        assert_eq!(
+            ChromiumSchema::database_path(profile.path()),
+            network.join("Cookies")
         );
+        let store = ChromiumStore::of(profile.path()).unwrap();
+        let domains = candidate_domains("example.com");
+        assert!(store.last_used_for(&domains, NOW).unwrap().is_some());
     }
 
     #[test]
     fn unknown_database_versions_are_refused() {
         let dir = PrivateDir::new().unwrap();
-        let path = create_db(dir.path(), "25", &[]);
+        create_db(dir.path(), "25", &[]);
         assert!(matches!(
-            CookieDb::open(&path),
+            ChromiumStore::of(dir.path()),
             Err(Error::UnsupportedDatabaseVersion(25))
+        ));
+        let dir = PrivateDir::new().unwrap();
+        create_db(dir.path(), "next", &[]);
+        assert!(matches!(
+            ChromiumStore::of(dir.path()),
+            Err(Error::DatabaseQuery(reason)) if reason.contains("next")
         ));
     }
 }

@@ -7,10 +7,10 @@ pub(crate) mod local_state;
 #[cfg(test)]
 pub(crate) mod test_vectors;
 
+use crate::clock::MICROS_PER_SEC;
+
 /// Seconds from 1601-01-01, where Chromium counts time from, to 1970-01-01 (Unix time).
 const EPOCH_OFFSET_SECS: i64 = 11_644_473_600;
-/// Chromium times are in microseconds.
-const MICROS_PER_SEC: i64 = 1_000_000;
 
 /// Chromium stores times as microseconds since 1601-01-01 UTC.
 pub(crate) fn unix_to_chromium(unix_secs: i64) -> i64 {

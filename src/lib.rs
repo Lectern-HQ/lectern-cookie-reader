@@ -44,6 +44,7 @@ mod private_dir;
 mod profile;
 mod reader;
 mod safari;
+mod sqlite_store;
 mod suggest;
 
 pub use browser::{Browser, Engine};

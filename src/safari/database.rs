@@ -20,11 +20,6 @@ fn database_path(profile_dir: &Path) -> PathBuf {
     profile_dir.join(DATABASE_FILE)
 }
 
-/// Whether `profile_dir` holds a Safari cookie file.
-pub(crate) fn has_database(profile_dir: &Path) -> bool {
-    database_path(profile_dir).is_file()
-}
-
 /// The content of a Safari cookie file, cleared from memory when dropped.
 pub(crate) struct CookieFileData {
     /// The file's bytes.
@@ -32,6 +27,11 @@ pub(crate) struct CookieFileData {
 }
 
 impl CookieFileData {
+    /// Whether `profile_dir` holds a Safari cookie file.
+    pub(crate) fn has_database(profile_dir: &Path) -> bool {
+        database_path(profile_dir).is_file()
+    }
+
     /// Reads the cookie file in `profile_dir`. A file macOS does not let this app read is
     /// [`Error::PermissionNeeded`].
     pub(crate) fn of(profile_dir: &Path) -> Result<Self> {
@@ -114,7 +114,7 @@ mod tests {
             Generated::new(".example.com", "expired", NOW - 60),
             Generated::new("other.com", "foreign", NOW + 60).created(NOW - 1),
         ]);
-        assert!(has_database(dir.path()));
+        assert!(CookieFileData::has_database(dir.path()));
         let data = CookieFileData::of(dir.path()).unwrap();
         let domains = candidate_domains("www.example.com");
 
@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn a_missing_file_is_its_own_error() {
         let dir = PrivateDir::new().unwrap();
-        assert!(!has_database(dir.path()));
+        assert!(!CookieFileData::has_database(dir.path()));
         assert!(matches!(
             CookieFileData::of(dir.path()),
             Err(Error::DatabaseNotFound(_))
