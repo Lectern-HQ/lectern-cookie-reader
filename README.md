@@ -1,10 +1,10 @@
 # lectern-cookie-reader
 
-A small Rust library that reads the login cookies for **one website** from a browser on your own Mac, so a desktop app can download something you are already allowed to see, without asking for your password.
+A small Rust library that reads the login cookies for **one website** from a browser on your own computer (macOS on Apple Silicon, or Windows x64), so a desktop app can download something you are already allowed to see, without asking for your password.
 
 It is the part of [Lectern](https://github.com/Lectern-HQ) that touches your browser data, published so anyone can check exactly what it does.
 
-Status: version 0.3.0. Reading cookies is tested with Dia on macOS; seven more Chromium browsers are listed but not tested yet. See [CHANGELOG.md](CHANGELOG.md).
+Status: version 0.3.0 is released; the next version adds the Firefox family, Safari and Windows (see [CHANGELOG.md](CHANGELOG.md)). Reading cookies is tested with Dia on macOS; every other browser and Windows are in the library but not tested on a real computer yet.
 
 ## Usage
 
@@ -18,7 +18,7 @@ use lectern_cookie_reader::{Browser, CookieFile, Error, read_cookies};
 
 fn download(host: &str) -> Result<(), Error> {
     let profile = Browser::by_id("dia").expect("Dia is in the catalog").default_profile()?;
-    let cookies = read_cookies(&profile, host)?; // macOS may ask for permission here
+    let cookies = read_cookies(&profile, host)?; // macOS may ask for permission here; Windows does not
     if cookies.is_empty() {
         // Not logged in to this site in this profile.
         return Ok(());
@@ -75,9 +75,9 @@ Every error says what failed, never a cookie value. The ones an app usually hand
 
 ## What it does
 
-1. Copies the profile's cookie database into a temporary folder only you can open. The browser's own file is never opened or changed.
+1. Copies the profile's cookie database into a temporary folder only you can open. The browser's own file is never opened or changed. On Windows, Chromium browsers lock that file while they run, so the browser has to be closed first (`DatabaseLocked`).
 2. Looks for cookies of the website you asked about, using standard cookie domain matching. This step only reads site names, which browsers store unencrypted. If there are none, it stops here and macOS shows no dialog.
-3. For Chromium browsers, asks macOS for the browser's "Safe Storage" key through Apple's Keychain API. macOS shows its own dialog first, and you decide.
+3. For Chromium browsers, gets the browser's key. On macOS it asks for the "Safe Storage" key through Apple's Keychain API: macOS shows its own dialog first, and you decide. On Windows it reads the key from the browser's `Local State` file and unprotects it with DPAPI, which works only for your Windows account and shows no dialog. If the site's cookies use Chrome's app-bound encryption, it stops here with `AppBoundEncryption`.
 4. Decrypts only the cookies that match that website, and refuses any value the browser stored for another site. The Firefox family and Safari store values without encryption, so steps 3 and 4 do not apply; only the cookies of normal tabs are read, not those of Firefox containers. Safari's file is read into memory that is cleared afterwards, not copied, and only after the user allowed it.
 5. If asked, writes them to a `cookies.txt` file readable only by you, deleted as soon as the app is done with it.
 
@@ -87,6 +87,7 @@ Every error says what failed, never a cookie value. The ones an app usually hand
 - Never reads cookies for other websites.
 - Never sends anything over the network.
 - Never writes cookie values to logs or error messages.
+- Never gets around app-bound encryption, and never needs administrator rights.
 - Never runs the `security` command line tool. Using Apple's Keychain API means the macOS permission belongs to the app that uses this library, not to a shared system tool.
 
 ## Supported browsers
@@ -94,8 +95,9 @@ Every error says what failed, never a cookie value. The ones an app usually hand
 | Browser | macOS | Windows |
 | --- | --- | --- |
 | Dia | Tested | Not available |
-| Arc, Brave, Google Chrome, Chromium, Microsoft Edge, Opera, Vivaldi | In the catalog, not tested yet ([#54](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/54)) | Planned ([#8](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/8)) |
-| Firefox, Floorp, LibreWolf, Waterfox, Zen | In the catalog, not tested yet ([#6](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/6)) | Planned ([#8](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/8)) |
+| Brave, Google Chrome, Chromium, Microsoft Edge, Opera, Vivaldi | In the catalog, not tested yet ([#54](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/54)) | In the library, not tested yet ([#20](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/20)); Chrome and Edge cookies with app-bound encryption are reported, not read |
+| Arc | In the catalog, not tested yet ([#54](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/54)) | Not supported |
+| Firefox, Floorp, LibreWolf, Waterfox, Zen | In the catalog, not tested yet ([#6](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/6)) | In the library, not tested yet ([#20](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/20)) |
 | Safari | In the catalog, not tested yet; needs your permission to read its protected cookie file ([#7](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/7)) | Not available |
 
 Finding which browser and profile is logged in (`find_logins`, `suggest`) covers every browser in the catalog except Safari. macOS protects Safari's cookie file, so `find_logins` never reads it and lists Safari in `skipped` with `PermissionNeeded` instead of causing a dialog.

@@ -51,13 +51,12 @@ pub(crate) fn create_owner_only_dir(path: &Path) -> io::Result<()> {
     let path = wide(path.as_os_str());
     // SAFETY: `path` is zero-terminated and `attributes` points to the descriptor made
     // above; both outlive the call. The descriptor is freed once, after the call.
-    let created = unsafe {
+    unsafe {
         let created = CreateDirectoryW(path.as_ptr(), &attributes);
         let error = io::Error::last_os_error();
         LocalFree(descriptor);
         if created == 0 { Err(error) } else { Ok(()) }
-    };
-    created
+    }
 }
 
 /// The current user's security identifier as text, for example `S-1-5-21-...-1001`.
@@ -177,10 +176,12 @@ mod tests {
         let _ = std::fs::remove_dir_all(&parent);
 
         assert!(sid.starts_with("S-1-"), "{sid}");
+        // The folder inherits nothing (P); the file inherits the folder's one entry (ID).
+        assert!(folder_acl.starts_with("D:P"), "{folder_acl}");
+        assert!(file_acl.contains(";ID;"), "{file_acl}");
         for acl in [&folder_acl, &file_acl] {
-            assert!(acl.starts_with("D:P"), "{acl}");
             assert_eq!(acl.matches('(').count(), 1, "one entry only: {acl}");
-            assert!(acl.contains(&format!(";{sid})")), "{acl}");
+            assert!(acl.contains(&format!(";FA;;;{sid})")), "{acl}");
         }
     }
 
