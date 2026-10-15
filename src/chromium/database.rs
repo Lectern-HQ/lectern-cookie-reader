@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
 
-use crate::chromium::{chromium_to_unix, crypto, unix_to_chromium};
+use crate::chromium::crypto::{self, ChromiumKey};
+use crate::chromium::{chromium_to_unix, unix_to_chromium};
 use crate::database_copy::{DatabaseCopy, placeholders, query_error, time_and_domains, unreadable};
 use crate::{Cookie, Error, Result};
 
@@ -115,7 +116,7 @@ impl CookieDb {
     pub(crate) fn read(
         &self,
         domains: &[String],
-        key: &[u8; 16],
+        key: &ChromiumKey,
         now_unix: i64,
     ) -> Result<Vec<Cookie>> {
         let sql = format!(
