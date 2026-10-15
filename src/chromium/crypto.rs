@@ -28,6 +28,9 @@ const HOST_HASH_DB_VERSION: i64 = 24;
 
 /// Every value this crate decrypts starts with this version marker.
 const PREFIX: &[u8] = b"v10";
+/// Values with this marker use app-bound encryption (Chrome 127 and later on Windows):
+/// only the browser itself can decrypt them, and this crate never tries.
+pub(crate) const APP_BOUND_PREFIX: &[u8] = b"v20";
 /// Chromium's fixed salt for turning the password into a key.
 #[cfg(any(target_os = "macos", test))]
 const SALT: &[u8] = b"saltysalt";

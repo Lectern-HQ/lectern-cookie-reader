@@ -68,6 +68,8 @@ Every error says what failed, never a cookie value. The ones an app usually hand
 | `DatabaseNotFound` | The profile has no cookie database. | Ask which browser or profile the user logs in with. |
 | `UnsupportedDatabaseVersion` | The browser was updated to a format this version does not know. | Ask the user to update the app. |
 | `PermissionNeeded` | macOS protects the file (Safari) and the user has not allowed access. | Ask the user to pick the file, as above. |
+| `AppBoundEncryption` | Chrome or Edge on Windows protects the site's cookies so that only the browser can read them. This library never gets around that. | Offer the `cookies.txt` fallback. |
+| `DatabaseLocked` | The browser is running and keeps its cookie database locked (Windows). | Ask the user to close the browser, then try again. |
 | `HostHashMismatch` | A stored value belongs to another site. Nothing is returned. | Report it; it should never happen in a normal browser. |
 | `Unsupported` | Browser or operating system not supported yet. | Offer the `cookies.txt` fallback. |
 

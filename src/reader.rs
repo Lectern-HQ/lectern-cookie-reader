@@ -17,7 +17,9 @@ use crate::{firefox, safari};
 /// 2. If no cookie for `host` is stored, an empty list is returned. The browser's key is
 ///    not requested, so the user sees no permission dialog for a site they are not
 ///    logged in to.
-/// 3. For Chromium browsers, the browser's key is requested from the operating system (on
+/// 3. For Chromium browsers, if a matching cookie uses app-bound encryption (Chrome and
+///    Edge on Windows), the error is [`crate::Error::AppBoundEncryption`] and the key is
+///    not requested. Otherwise the browser's key is requested from the operating system (on
 ///    macOS the Keychain, which may show a dialog), and only the matching cookies are
 ///    decrypted. The Firefox family and Safari store values without encryption, so there
 ///    is no key and no dialog.
@@ -44,6 +46,11 @@ fn read_chromium(
     let copy = chromium::database::ProfileCopy::of(&profile.path)?;
     if copy.db().last_used_for(domains, now_unix)?.is_none() {
         return Ok(Vec::new());
+    }
+    if copy.db().uses_app_bound_encryption(domains, now_unix)? {
+        return Err(crate::Error::AppBoundEncryption {
+            browser: profile.browser.name().to_owned(),
+        });
     }
     let key = chromium_key(profile.browser)?;
     copy.db().read(domains, &key, now_unix)
@@ -146,6 +153,24 @@ mod tests {
         let cookies = read_safari(&profile, &candidate_domains("example.com"), NOW).unwrap();
         assert_eq!(cookies.len(), 1);
         assert_eq!(cookies[0].value.expose(), "value-of-session");
+    }
+
+    #[test]
+    fn app_bound_values_are_reported_before_asking_for_the_key() {
+        let dir = PrivateDir::new().unwrap();
+        create_db(
+            dir.path(),
+            "24",
+            &[row(".example.com", "session", None).value(b"v20sealed")],
+        );
+        let err = read_chromium(
+            &dia_profile(&dir),
+            &candidate_domains("example.com"),
+            NOW,
+            |_| panic!("the key must not be requested"),
+        )
+        .unwrap_err();
+        assert!(matches!(err, Error::AppBoundEncryption { browser } if browser == "Dia"));
     }
 
     #[test]

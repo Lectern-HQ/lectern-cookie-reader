@@ -54,6 +54,13 @@ pub enum Error {
         /// The cookie's name, with tabs and line breaks escaped.
         cookie_name: String,
     },
+    /// The browser protects the site's cookies with app-bound encryption (Chrome and Edge
+    /// on Windows since version 127). Only the browser itself can read them, and this
+    /// crate never tries to get around that: use a `cookies.txt` export instead.
+    AppBoundEncryption {
+        /// The browser's name, for example `Google Chrome`.
+        browser: String,
+    },
     /// A decrypted value was stored for another site. The value is discarded.
     HostHashMismatch {
         /// The cookie's name, never its value.
@@ -113,6 +120,10 @@ impl fmt::Display for Error {
                     "cookie {cookie_name:?} contains a tab or a line break and cannot be written"
                 )
             }
+            Error::AppBoundEncryption { browser } => write!(
+                f,
+                "{browser} protects this site's cookies with app-bound encryption; export them to a cookies.txt file instead"
+            ),
             Error::HostHashMismatch { cookie_name } => {
                 write!(
                     f,
@@ -179,6 +190,12 @@ mod tests {
                     cookie_name: "session".into(),
                 },
                 "another site",
+            ),
+            (
+                Error::AppBoundEncryption {
+                    browser: "Google Chrome".into(),
+                },
+                "cookies.txt",
             ),
             (Error::Unsupported("Safari".into()), "Safari"),
         ];

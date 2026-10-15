@@ -10,6 +10,7 @@ All notable changes to this library. The format follows [Keep a Changelog](https
 
 - Windows (x64): each browser's data folder is in the catalog (Chromium browsers under `%LOCALAPPDATA%`, Opera and the Firefox family under `%APPDATA%`), so `profiles()`, `default_profile()` and `find_logins` work there. The Chromium database is read from `Network\Cookies` where it exists. A database the running browser keeps locked is the new `Error::DatabaseLocked`. Arc, Dia and Safari are not read on Windows.
 - Chromium cookies on Windows: the key is read from `Local State` and unprotected with DPAPI for the current user (no dialog), and `v10` values are decrypted with AES-256-GCM, with the same host hash check as on macOS.
+- App-bound encryption (`v20` values, Chrome and Edge on Windows since version 127) is detected before the key is requested and reported as the new `Error::AppBoundEncryption`, so the app can offer the `cookies.txt` fallback. It is never bypassed.
 
 ### Changed
 - **Breaking:** `Engine` is `non_exhaustive`, so a `match` on it needs a wildcard arm. New engines can then be added without another breaking change.
