@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use zeroize::Zeroizing;
 
+use crate::domain::is_sent;
 use crate::files::read_error;
 use crate::safari::binary_cookies::{self, Record};
 use crate::{Cookie, Error, Result, SecretValue};
@@ -88,7 +89,7 @@ impl CookieFileData {
     ) -> Result<impl Iterator<Item = Record<'a>>> {
         Ok(binary_cookies::parse(&self.data)?
             .into_iter()
-            .filter(move |r| r.expires > now_unix && domains.iter().any(|d| d == r.domain)))
+            .filter(move |r| is_sent(r.domain, Some(r.expires), domains, now_unix)))
     }
 }
 
