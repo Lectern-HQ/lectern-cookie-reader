@@ -4,13 +4,13 @@ A small Rust library that reads the login cookies for **one website** from a bro
 
 It is the part of [Lectern](https://github.com/Lectern-HQ) that touches your browser data, published so anyone can check exactly what it does.
 
-Status: version 0.4.0 adds the Firefox family, Safari and Windows (see [CHANGELOG.md](CHANGELOG.md)). Reading cookies is tested on macOS with Arc, Dia, Google Chrome, Firefox and Safari; the other browsers and Windows are in the library but not tested on a real computer yet.
+Status: version 0.5.0 adds reading a `cookies.txt` for one site; 0.4.0 added the Firefox family, Safari and Windows (see [CHANGELOG.md](CHANGELOG.md)). Reading cookies is tested on macOS with Arc, Dia, Google Chrome, Firefox and Safari; the other browsers and Windows are in the library but not tested on a real computer yet.
 
 ## Usage
 
 ```toml
 [dependencies]
-lectern-cookie-reader = { git = "https://github.com/Lectern-HQ/lectern-cookie-reader", tag = "v0.4.0" }
+lectern-cookie-reader = { git = "https://github.com/Lectern-HQ/lectern-cookie-reader", tag = "v0.5.0" }
 ```
 
 ```rust
@@ -56,6 +56,21 @@ fn which_browser(host: &str) -> Result<(), Error> {
 The suggestion is a profile logged in to the site (most recently used first), else the
 system's default browser, else the most recently used profile. Show it for the user to
 confirm: the default browser is often not the one used for lectures.
+
+When the browser cannot be read (Safari, Chrome or Edge with app-bound encryption on
+Windows), the user can export a `cookies.txt` with a browser extension instead. Read only
+the site's cookies from it, with the same domain rules, and write them to a `CookieFile`:
+
+```rust
+use lectern_cookie_reader::{CookieFile, Error, cookies_from_netscape};
+
+fn from_export(text: &str, host: &str) -> Result<CookieFile, Error> {
+    let cookies = cookies_from_netscape(text, host)?; // other sites' cookies are skipped
+    CookieFile::create(&cookies)
+}
+```
+
+A line that is not in Netscape format is reported by its number only, never its content.
 
 ### Errors
 

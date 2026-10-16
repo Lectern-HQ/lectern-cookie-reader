@@ -1,6 +1,6 @@
 [package]
 name = "lectern-cookie-reader"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Reads the login cookies for one website from a browser on your own computer, with your permission."
