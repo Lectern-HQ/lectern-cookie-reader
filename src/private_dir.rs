@@ -1,5 +1,6 @@
 //! A temporary folder that only the current user can open. It is removed, with everything
-//! in it, when it goes out of scope, also after an error or a panic.
+//! in it, when it goes out of scope, also after an error or a panic. While it exists, it is
+//! on the list of work folders removed on the way out (`work_folders.rs`).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -11,6 +12,9 @@ use crate::{Error, Result};
 /// How many unused names to try before giving up.
 const ATTEMPTS: u32 = 8;
 
+/// The start of every work folder's name, followed by `{pid}-{nanos}-{counter}`.
+const PREFIX: &str = concat!(env!("CARGO_PKG_NAME"), "-");
+
 /// A temporary folder that only the current user can open, removed when dropped.
 pub(crate) struct PrivateDir {
     /// Where the folder is.
@@ -18,20 +22,25 @@ pub(crate) struct PrivateDir {
 }
 
 impl PrivateDir {
-    /// Creates a new folder in the system's temporary folder.
+    /// Creates a new folder in the system's temporary folder. The first time in a process,
+    /// it first removes the folders that ended processes left there.
     pub(crate) fn new() -> Result<Self> {
+        crate::leftovers::remove_once();
         Self::new_in(&std::env::temp_dir())
     }
 
-    /// The folder is created in one step with its final permissions (owner only on Unix),
+    /// The folder is created in one step with its final permissions (owner only),
     /// and creating fails if the name already exists, so a folder prepared by someone else
     /// is never reused.
     pub(crate) fn new_in(parent: &Path) -> Result<Self> {
         let mut last_error = None;
         for _ in 0..ATTEMPTS {
             let path = parent.join(unique_name());
-            match builder().create(&path) {
-                Ok(()) => return Ok(Self { path }),
+            match create_owner_only(&path) {
+                Ok(()) => {
+                    crate::work_folders::LIVE.add(&path);
+                    return Ok(Self { path });
+                }
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => last_error = Some(e),
                 Err(e) => return Err(work_folder_error(&path, e)),
             }
@@ -52,6 +61,7 @@ impl Drop for PrivateDir {
     fn drop(&mut self) {
         // Nothing useful can be done with an error while dropping. The folder is in the
         // system's temporary folder and holds only files of this crate.
+        crate::work_folders::LIVE.remove(&self.path);
         let _ = fs::remove_dir_all(&self.path);
     }
 }
@@ -64,16 +74,17 @@ pub(crate) fn work_folder_error(path: &Path, error: std::io::Error) -> Error {
     }
 }
 
-/// A folder builder that creates folders readable only by the user (on Unix).
-fn builder() -> fs::DirBuilder {
-    #[allow(unused_mut)]
-    let mut builder = fs::DirBuilder::new();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        builder.mode(0o700);
-    }
-    builder
+/// Creates the folder `path` that only the user can open: mode 0700 on Unix.
+#[cfg(unix)]
+fn create_owner_only(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    fs::DirBuilder::new().mode(0o700).create(path)
+}
+
+/// Creates the folder `path` that only the user can open: an access list on Windows.
+#[cfg(windows)]
+fn create_owner_only(path: &Path) -> std::io::Result<()> {
+    crate::platform::create_owner_only_dir(path)
 }
 
 /// A name no other folder of this crate uses: process id, time and a counter.
@@ -83,11 +94,41 @@ fn unique_name() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    format!(
-        "lectern-cookie-reader-{}-{nanos}-{}",
+    folder_name(
         std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
+        nanos,
+        COUNTER.fetch_add(1, Ordering::Relaxed),
     )
+}
+
+/// The work folder name for process `pid`, made at `nanos` with `counter`. The only place
+/// that writes the name format; [`owner_pid`] reads it back.
+pub(crate) fn folder_name(pid: u32, nanos: u128, counter: u64) -> String {
+    format!("{PREFIX}{pid}-{nanos}-{counter}")
+}
+
+/// Removes each folder in `paths` with everything in it, and returns how many it removed.
+/// A folder that cannot be removed, or is already gone, is not counted.
+pub(crate) fn remove_folders(paths: impl IntoIterator<Item = PathBuf>) -> usize {
+    paths
+        .into_iter()
+        .filter(|path| fs::remove_dir_all(path).is_ok())
+        .count()
+}
+
+/// The id of the process that made the work folder `name`, or `None` if `name` is not
+/// exactly a name [`unique_name`] makes.
+pub(crate) fn owner_pid(name: &str) -> Option<u32> {
+    let mut parts = name.strip_prefix(PREFIX)?.split('-');
+    let pid = digits(parts.next()?)?.parse().ok()?;
+    digits(parts.next()?)?.parse::<u128>().ok()?;
+    digits(parts.next()?)?.parse::<u64>().ok()?;
+    parts.next().is_none().then_some(pid)
+}
+
+/// `part` if it is one or more ASCII digits and nothing else.
+fn digits(part: &str) -> Option<&str> {
+    (!part.is_empty() && part.bytes().all(|b| b.is_ascii_digit())).then_some(part)
 }
 
 #[cfg(test)]
@@ -113,6 +154,40 @@ mod tests {
         }));
         assert!(result.is_err());
         assert!(!kept.unwrap().exists());
+    }
+
+    #[test]
+    fn the_owner_is_read_back_from_a_made_name() {
+        assert_eq!(owner_pid(&unique_name()), Some(std::process::id()));
+        assert_eq!(owner_pid(&folder_name(42, 1, 5)), Some(42));
+    }
+
+    #[test]
+    fn any_other_name_has_no_owner() {
+        let malformed = [
+            "42-1-",
+            "42-1",
+            "42-1-5-6",
+            "+42-1-5",
+            "x-1-5",
+            "99999999999-1-5",
+        ];
+        for name in malformed.map(|rest| format!("{PREFIX}{rest}")) {
+            assert_eq!(owner_pid(&name), None, "{name}");
+        }
+        assert_eq!(owner_pid("other-42-1-5"), None);
+        assert_eq!(owner_pid(""), None);
+    }
+
+    #[test]
+    fn removed_folders_are_counted_once() {
+        let parent = PrivateDir::new().unwrap();
+        let folder = parent.path().join("a");
+        fs::create_dir(&folder).unwrap();
+        fs::write(folder.join("file"), "x").unwrap();
+        let missing = parent.path().join("missing");
+        assert_eq!(remove_folders([folder.clone(), missing]), 1);
+        assert!(!folder.exists());
     }
 
     #[test]

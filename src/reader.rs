@@ -1,11 +1,9 @@
 //! The public lookup: the cookies of one website in one browser profile.
 
-use zeroize::Zeroizing;
-
-use crate::chromium::database::ProfileCopy;
 use crate::clock::now_unix;
 use crate::domain::domains_for;
-use crate::{Browser, Cookie, Engine, Error, Profile, Result, platform};
+use crate::engine_store::StoreCopy;
+use crate::{Cookie, Profile, Result, platform};
 
 /// Reads the unexpired cookies that a browser would send to `host`.
 ///
@@ -17,95 +15,22 @@ use crate::{Browser, Cookie, Engine, Error, Profile, Result, platform};
 /// 2. If no cookie for `host` is stored, an empty list is returned. The browser's key is
 ///    not requested, so the user sees no permission dialog for a site they are not
 ///    logged in to.
-/// 3. The browser's key is requested from the operating system (on macOS the Keychain,
-///    which may show a dialog), and only the matching cookies are decrypted.
+/// 3. For Chromium browsers, if a matching cookie uses app-bound encryption (Chrome and
+///    Edge on Windows), the error is [`crate::Error::AppBoundEncryption`] and the key is
+///    not requested. Otherwise the browser's key is requested from the operating system (on
+///    macOS the Keychain, which may show a dialog), and only the matching cookies are
+///    decrypted. The Firefox family and Safari store values without encryption, so there
+///    is no key and no dialog.
+///
+/// Safari's cookie file is protected by macOS and read directly, not copied. For Safari,
+/// `profile.path` is the folder of the `Cookies.binarycookies` file the user allowed this
+/// app to read; without that permission the error is [`crate::Error::PermissionNeeded`].
 pub fn read_cookies(profile: &Profile, host: &str) -> Result<Vec<Cookie>> {
     let domains = domains_for(host)?;
-    match profile.browser.engine() {
-        Engine::Chromium => read_chromium(profile, &domains, now_unix(), platform::chromium_key),
-        Engine::Firefox => Err(Error::Unsupported(format!(
-            "reading {} profiles",
-            profile.browser.name()
-        ))),
-    }
-}
-
-/// `chromium_key` is a parameter so tests can run every step with a test key.
-fn read_chromium(
-    profile: &Profile,
-    domains: &[String],
-    now_unix: i64,
-    chromium_key: impl FnOnce(Browser) -> Result<Zeroizing<[u8; 16]>>,
-) -> Result<Vec<Cookie>> {
-    let copy = ProfileCopy::of(&profile.path)?;
-    if copy.db().last_used_for(domains, now_unix)?.is_none() {
-        return Ok(Vec::new());
-    }
-    let key = chromium_key(profile.browser)?;
-    copy.db().read(domains, &key, now_unix)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::browser::tests::browser;
-    use crate::chromium::test_vectors::{NOW, create_db, key, row};
-    use crate::domain::candidate_domains;
-    use crate::private_dir::PrivateDir;
-
-    fn dia_profile(dir: &PrivateDir) -> Profile {
-        Profile {
-            browser: browser("dia"),
-            name: "Test".into(),
-            path: dir.path().to_owned(),
-        }
-    }
-
-    #[test]
-    fn decrypts_the_matching_cookies_with_the_browser_key() {
-        let dir = PrivateDir::new().unwrap();
-        create_db(dir.path(), "24", &[row(".example.com", "session", None)]);
-        let mut asked_for = None;
-        let cookies = read_chromium(
-            &dia_profile(&dir),
-            &candidate_domains("example.com"),
-            NOW,
-            |browser| {
-                asked_for = Some(browser);
-                Ok(Zeroizing::new(key()))
-            },
-        )
-        .unwrap();
-        assert_eq!(asked_for, Some(browser("dia")));
-        assert_eq!(cookies.len(), 1);
-        assert_eq!(cookies[0].value.expose(), "hello-world");
-    }
-
-    #[test]
-    fn the_key_is_not_requested_without_a_matching_cookie() {
-        let dir = PrivateDir::new().unwrap();
-        create_db(dir.path(), "24", &[row(".other.com", "session", None)]);
-        let cookies = read_chromium(
-            &dia_profile(&dir),
-            &candidate_domains("example.com"),
-            NOW,
-            |_| panic!("the key must not be requested"),
-        )
-        .unwrap();
-        assert!(cookies.is_empty());
-    }
-
-    #[test]
-    fn a_denied_key_is_passed_on() {
-        let dir = PrivateDir::new().unwrap();
-        create_db(dir.path(), "24", &[row(".example.com", "session", None)]);
-        let err = read_chromium(
-            &dia_profile(&dir),
-            &candidate_domains("example.com"),
-            NOW,
-            |_| Err(Error::KeyAccessDenied),
-        )
-        .unwrap_err();
-        assert!(matches!(err, Error::KeyAccessDenied));
-    }
+    StoreCopy::of(profile)?.read(
+        profile.browser,
+        &domains,
+        now_unix(),
+        platform::chromium_key,
+    )
 }

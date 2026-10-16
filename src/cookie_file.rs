@@ -3,6 +3,9 @@
 //! It is the most sensitive file Lectern creates, so it is written into a folder only the
 //! user can open, readable only by the user, and deleted with its folder when the
 //! [`CookieFile`] goes out of scope: after success, after an error and after a panic.
+//! A killed process or a quit through `process::exit` drops nothing: then
+//! [`crate::remove_work_folders`] on the way out, [`crate::clean_up_on_signals`], or
+//! [`crate::remove_leftovers`] at the next start remove it.
 
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -41,7 +44,6 @@ impl CookieFile {
     /// Writes `cookies` to a new file in a new private temporary folder.
     pub fn create(cookies: &[Cookie]) -> Result<Self> {
         let content = to_netscape(cookies)?;
-        ensure_private_files_supported()?;
         let folder = PrivateDir::new()?;
         let path = folder.path().join(FILE_NAME);
         let mut file = create_owner_only(&path).map_err(|e| work_folder_error(&path, e))?;
@@ -60,6 +62,8 @@ impl CookieFile {
 }
 
 /// `create_new` refuses an existing file, so nothing prepared in advance is written to.
+/// On Unix the file is made readable only by the user; on Windows it inherits the private
+/// folder's access list, which lets only the user in.
 fn create_owner_only(path: &Path) -> std::io::Result<File> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
@@ -69,20 +73,6 @@ fn create_owner_only(path: &Path) -> std::io::Result<File> {
         options.mode(0o600);
     }
     options.open(path)
-}
-
-/// Refuses to write a cookie file where it cannot be made readable only by the user.
-#[cfg(unix)]
-fn ensure_private_files_supported() -> Result<()> {
-    Ok(())
-}
-
-/// On Windows the file must be limited to the current user with an access list first.
-#[cfg(not(unix))]
-fn ensure_private_files_supported() -> Result<()> {
-    Err(crate::Error::Unsupported(
-        "a cookie file only the current user can read, on this operating system".into(),
-    ))
 }
 
 impl std::fmt::Debug for CookieFile {

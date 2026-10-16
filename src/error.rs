@@ -20,6 +20,9 @@ pub enum Error {
         /// The reason from the operating system or SQLite.
         reason: String,
     },
+    /// The running browser keeps its cookie database locked, so it cannot be copied
+    /// (Chrome and Edge on Windows). Closing the browser releases it.
+    DatabaseLocked(PathBuf),
     /// The copied cookie database could be opened but not queried (unexpected layout).
     DatabaseQuery(String),
     /// The private temporary folder could not be created or written.
@@ -34,8 +37,14 @@ pub enum Error {
     UnsupportedDatabaseVersion(i64),
     /// The user said no to the operating system's permission dialog.
     KeyAccessDenied,
+    /// The operating system protects this file or folder, and the user has not allowed this
+    /// app to read it yet. On macOS 27 that is Safari's, Google Chrome's and Firefox's data
+    /// without Full Disk Access; the message says where to allow it.
+    PermissionNeeded(PathBuf),
     /// The browser's key was not found (for example the browser was never opened).
     KeyNotFound,
+    /// The browser's stored key does not have the expected size or format.
+    InvalidKey,
     /// Reading the key failed for another reason (operating system error code).
     KeyUnavailable(i32),
     /// One cookie could not be decrypted. Only its name is given, never its value.
@@ -47,6 +56,13 @@ pub enum Error {
     InvalidCookie {
         /// The cookie's name, with tabs and line breaks escaped.
         cookie_name: String,
+    },
+    /// The browser protects the site's cookies with app-bound encryption (Chrome and Edge
+    /// on Windows since version 127). Only the browser itself can read them, and this
+    /// crate never tries to get around that: use a `cookies.txt` export instead.
+    AppBoundEncryption {
+        /// The browser's name, for example `Google Chrome`.
+        browser: String,
     },
     /// A decrypted value was stored for another site. The value is discarded.
     HostHashMismatch {
@@ -72,6 +88,11 @@ impl fmt::Display for Error {
                     path.display()
                 )
             }
+            Error::DatabaseLocked(path) => write!(
+                f,
+                "the browser keeps its cookie database {} locked; close the browser and try again",
+                path.display()
+            ),
             Error::DatabaseQuery(reason) => write!(f, "cannot query cookie database: {reason}"),
             Error::WorkFolder { path, reason } => {
                 write!(
@@ -84,7 +105,14 @@ impl fmt::Display for Error {
                 write!(f, "cookie database version {v} is not supported yet")
             }
             Error::KeyAccessDenied => write!(f, "access to the browser's key was denied"),
+            Error::PermissionNeeded(path) => write!(
+                f,
+                "the system protects {}; {}",
+                path.display(),
+                crate::platform::PERMISSION_HINT
+            ),
             Error::KeyNotFound => write!(f, "the browser's key was not found"),
+            Error::InvalidKey => write!(f, "the browser's key does not have the expected format"),
             Error::KeyUnavailable(code) => {
                 write!(f, "the browser's key is not available (error {code})")
             }
@@ -97,6 +125,10 @@ impl fmt::Display for Error {
                     "cookie {cookie_name:?} contains a tab or a line break and cannot be written"
                 )
             }
+            Error::AppBoundEncryption { browser } => write!(
+                f,
+                "{browser} protects this site's cookies with app-bound encryption; export them to a cookies.txt file instead"
+            ),
             Error::HostHashMismatch { cookie_name } => {
                 write!(
                     f,
@@ -122,6 +154,7 @@ mod tests {
             (Error::InvalidHost("a b".into()), "a b"),
             (Error::InvalidLink("only https".into()), "only https"),
             (Error::DatabaseNotFound(path()), "/tmp/Cookies"),
+            (Error::DatabaseLocked(path()), "close the browser"),
             (
                 Error::DatabaseUnreadable {
                     path: path(),
@@ -142,8 +175,14 @@ mod tests {
             ),
             (Error::UnsupportedDatabaseVersion(25), "25"),
             (Error::KeyAccessDenied, "denied"),
+            (Error::PermissionNeeded(path()), "/tmp/Cookies"),
+            (
+                Error::PermissionNeeded(path()),
+                crate::platform::PERMISSION_HINT,
+            ),
             (Error::KeyNotFound, "not found"),
-            (Error::KeyUnavailable(-1), "-1"),
+            (Error::InvalidKey, "format"),
+            (Error::KeyUnavailable(-25308), "-25308"),
             (
                 Error::DecryptionFailed {
                     cookie_name: "session".into(),
@@ -161,6 +200,12 @@ mod tests {
                     cookie_name: "session".into(),
                 },
                 "another site",
+            ),
+            (
+                Error::AppBoundEncryption {
+                    browser: "Google Chrome".into(),
+                },
+                "cookies.txt",
             ),
             (Error::Unsupported("Safari".into()), "Safari"),
         ];

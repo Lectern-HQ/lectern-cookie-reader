@@ -5,9 +5,9 @@
 use std::cmp::Reverse;
 use std::path::PathBuf;
 
-use crate::chromium::database::ProfileCopy;
 use crate::clock::now_unix;
 use crate::domain::domains_for;
+use crate::engine_store::StoreCopy;
 use crate::profile::profiles_in;
 use crate::{Browser, Error, Profile, Result, platform};
 
@@ -57,6 +57,10 @@ pub struct Scan {
 ///
 /// Fails only for an invalid host or an operating system this crate does not support yet.
 /// A browser or profile that cannot be read is listed in [`Scan::skipped`].
+///
+/// A browser whose data the system protects (Safari on macOS) is not read, so that no
+/// permission dialog appears: it is listed in [`Scan::skipped`] with
+/// [`Error::PermissionNeeded`]. Ask the user, then read it with [`crate::read_cookies`].
 pub fn find_logins(host: &str) -> Result<Scan> {
     let domains = domains_for(host)?;
     let data_dirs = Browser::all()
@@ -70,7 +74,12 @@ fn find_in(data_dirs: &[(Browser, PathBuf)], domains: &[String], now_unix: i64) 
     let mut profiles = Vec::new();
     let mut skipped = Vec::new();
     for (browser, data_dir) in data_dirs {
-        match profiles_in(*browser, data_dir) {
+        let found = if platform::is_protected(*browser) {
+            Err(Error::PermissionNeeded(data_dir.clone()))
+        } else {
+            profiles_in(*browser, data_dir)
+        };
+        match found {
             Ok(found) => profiles.extend(found),
             Err(error) => skipped.push(Skipped {
                 browser: *browser,
@@ -125,11 +134,8 @@ fn check(
     domains: &[String],
     now_unix: i64,
 ) -> Result<(Option<i64>, Option<i64>)> {
-    let copy = ProfileCopy::of(&profile.path)?;
-    Ok((
-        copy.db().last_used_for(domains, now_unix)?,
-        copy.db().last_active()?,
-    ))
+    let copy = StoreCopy::of(profile)?;
+    Ok((copy.last_used_for(domains, now_unix)?, copy.last_active()?))
 }
 
 #[cfg(test)]
@@ -243,6 +249,37 @@ mod tests {
         assert_eq!(result.skipped.len(), 1);
         assert_eq!(result.skipped[0].browser, browser("chrome"));
         assert_eq!(result.skipped[0].path, not_a_folder);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn safari_is_skipped_without_reading_its_folder() {
+        let dia = PrivateDir::new().unwrap();
+        std::fs::create_dir(dia.path().join("Default")).unwrap();
+        create_db(
+            &dia.path().join("Default"),
+            "24",
+            &[row(".example.com", "a", None)],
+        );
+        let safari_dir = dia.path().join("safari");
+        std::fs::create_dir(&safari_dir).unwrap();
+        // If the folder were read, this file would fail the scan as an invalid cookie file.
+        std::fs::write(safari_dir.join(crate::safari::database::DATABASE_FILE), "x").unwrap();
+        let data_dirs = [
+            (browser("dia"), dia.path().to_owned()),
+            (browser("safari"), safari_dir.clone()),
+        ];
+
+        let result = find_in(&data_dirs, &candidate_domains("example.com"), NOW);
+
+        assert_eq!(result.logins.len(), 1);
+        assert_eq!(result.checked.len(), 1);
+        assert_eq!(result.skipped.len(), 1);
+        assert_eq!(result.skipped[0].browser, browser("safari"));
+        assert!(matches!(
+            &result.skipped[0].error,
+            Error::PermissionNeeded(path) if *path == safari_dir
+        ));
     }
 
     #[test]

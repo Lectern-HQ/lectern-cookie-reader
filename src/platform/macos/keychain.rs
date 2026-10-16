@@ -8,7 +8,7 @@ use security_framework::passwords::get_generic_password;
 use zeroize::Zeroizing;
 
 use super::macos;
-use crate::chromium::crypto;
+use crate::chromium::crypto::{self, ChromiumKey};
 use crate::{Browser, Error, Result};
 
 /// `errSecUserCanceled`: the user clicked "Deny" in the Keychain dialog.
@@ -24,8 +24,10 @@ fn keychain_service(name: &str) -> String {
 }
 
 /// Asks the Keychain for the browser's password. macOS may show its permission dialog.
-pub(crate) fn chromium_key(browser: Browser) -> Result<Zeroizing<[u8; 16]>> {
-    let name = macos(browser)?.keychain_name;
+pub(crate) fn chromium_key(browser: Browser) -> Result<ChromiumKey> {
+    let name = macos(browser)?
+        .keychain_name
+        .ok_or_else(|| Error::Unsupported(format!("a Keychain key for {}", browser.name())))?;
     let password =
         get_generic_password(&keychain_service(name), name).map_err(|e| key_error(e.code()))?;
     let password = Zeroizing::new(password);
@@ -62,10 +64,17 @@ mod tests {
     }
 
     #[test]
+    fn a_browser_without_a_keychain_item_is_not_asked() {
+        let firefox = crate::browser::tests::browser("firefox");
+        assert!(matches!(chromium_key(firefox), Err(Error::Unsupported(_))));
+    }
+
+    #[test]
     fn dia_matches_the_keychain_item_seen_on_a_real_mac() {
         let name = macos(crate::browser::tests::browser("dia"))
             .unwrap()
-            .keychain_name;
+            .keychain_name
+            .unwrap();
         assert_eq!(keychain_service(name), "Dia Safe Storage");
         assert_eq!(name, "Dia");
     }

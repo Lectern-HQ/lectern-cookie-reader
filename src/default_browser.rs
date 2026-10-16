@@ -7,7 +7,7 @@ use crate::{Browser, platform};
 pub struct DefaultBrowser {
     /// The app's name, for example `Dia` or `Safari`.
     pub name: String,
-    /// The matching browser, or `None` for one this crate cannot read (such as Safari).
+    /// The matching browser, or `None` for one this crate cannot read.
     pub browser: Option<Browser>,
 }
 

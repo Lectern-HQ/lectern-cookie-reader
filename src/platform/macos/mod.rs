@@ -3,30 +3,40 @@
 
 mod keychain;
 mod launch_services;
+mod process;
 
 use std::path::PathBuf;
 
 use crate::browser::MacOs;
-use crate::{Browser, Error, Result};
+use crate::{Browser, Result};
 
 pub(crate) use keychain::chromium_key;
 pub(crate) use launch_services::default_browser;
+pub(crate) use process::is_running;
 
 /// The browser's macOS details, or an error if it does not exist on macOS.
 fn macos(browser: Browser) -> Result<&'static MacOs> {
-    browser
-        .spec()
-        .macos
-        .as_ref()
-        .ok_or_else(|| Error::Unsupported(format!("{} on macOS", browser.name())))
+    super::details(browser, browser.spec().macos.as_ref(), "macOS")
 }
 
 /// The folder that holds `browser`'s profiles, under the user's home folder.
 pub(crate) fn user_data_dir(browser: Browser) -> Result<PathBuf> {
-    let home = std::env::var_os("HOME")
-        .filter(|home| !home.is_empty())
-        .ok_or_else(|| Error::Unsupported("the HOME environment variable is not set".into()))?;
-    Ok(PathBuf::from(home).join(macos(browser)?.data_dir))
+    Ok(super::env_folder("HOME")?.join(macos(browser)?.data_dir))
+}
+
+/// Whether macOS protects `browser`'s data folder (Safari's container), so that reading
+/// it needs the user's permission.
+pub(crate) fn is_protected(browser: Browser) -> bool {
+    macos(browser).is_ok_and(|m| m.protected)
+}
+
+/// What the user does when macOS refuses a browser's data: on macOS 27, Safari's, Google
+/// Chrome's and Firefox's need Full Disk Access, and it applies once the app is reopened.
+pub(crate) const PERMISSION_HINT: &str = "turn on Full Disk Access for this app in System Settings > Privacy & Security > Full Disk Access, then quit and reopen it";
+
+/// Always `false`: macOS does not lock files against reading.
+pub(crate) fn is_locked(_error: &std::io::Error) -> bool {
+    false
 }
 
 #[cfg(test)]
@@ -38,6 +48,14 @@ mod tests {
     fn dia_profiles_are_under_application_support() {
         let dir = user_data_dir(browser("dia")).unwrap();
         assert!(dir.ends_with("Library/Application Support/Dia/User Data"));
+    }
+
+    #[test]
+    fn only_safaris_folder_is_protected() {
+        assert!(is_protected(browser("safari")));
+        assert!(!is_protected(browser("dia")));
+        assert!(!is_protected(browser("firefox")));
+        assert!(!is_locked(&std::io::Error::from_raw_os_error(32)));
     }
 
     #[test]

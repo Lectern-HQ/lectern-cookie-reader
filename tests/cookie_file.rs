@@ -1,8 +1,6 @@
 //! Tests of `CookieFile`: where it is written, who can read it, and that it is always
-//! deleted. Unix only until Windows access lists are added (issue #2).
-#![cfg(unix)]
+//! deleted. Who can read it on Windows is tested with the access list code.
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 use lectern_cookie_reader::{Cookie, CookieFile, SecretValue};
@@ -26,10 +24,17 @@ fn failing_download(file: &CookieFile) -> Result<(), String> {
 }
 
 #[test]
-fn the_file_holds_the_cookies_and_only_the_user_can_read_it() {
+fn the_file_holds_the_cookies() {
     let file = CookieFile::create(&cookies()).unwrap();
     let text = std::fs::read_to_string(file.path()).unwrap();
     assert!(text.contains("\tsession\tgenerated-test-value\n"));
+}
+
+#[cfg(unix)]
+#[test]
+fn only_the_user_can_read_the_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let file = CookieFile::create(&cookies()).unwrap();
     let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode(file.path()), 0o600);
     assert_eq!(mode(file.path().parent().unwrap()), 0o700);

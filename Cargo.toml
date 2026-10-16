@@ -1,26 +1,51 @@
 [package]
 name = "lectern-cookie-reader"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Reads the login cookies for one website from a browser on your own computer, with your permission."
 license = "Apache-2.0"
 repository = "https://github.com/Lectern-HQ/lectern-cookie-reader"
 readme = "README.md"
-keywords = ["cookies", "browser", "keychain", "macos"]
-categories = ["authentication", "os::macos-apis"]
+keywords = ["cookies", "browser", "keychain", "macos", "windows"]
+categories = ["authentication", "os::macos-apis", "os::windows-apis"]
 
 [dependencies]
-aes = "0.9"
-cbc = "0.2"
-pbkdf2 = "0.13"
-sha1 = "0.11"
 sha2 = "0.11"
 rusqlite = { version = "0.40", features = ["bundled"] }
 zeroize = "1.9"
 
-
 [target.'cfg(target_os = "macos")'.dependencies]
+aes = "0.9"
+cbc = "0.2"
+pbkdf2 = "0.13"
+sha1 = "0.11"
 core-foundation = "0.10"
 core-foundation-sys = "0.8"
 security-framework = "3.7"
+libc = "0.2"
+signal-hook = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
+base64 = "0.23"
+serde_json = "1"
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Cryptography",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Threading",
+] }
+
+# The decryption code of both systems runs in the tests on both, so the tests on macOS
+# measure the Windows code too.
+[dev-dependencies]
+aes = "0.9"
+cbc = "0.2"
+pbkdf2 = "0.13"
+sha1 = "0.11"
+aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
+base64 = "0.23"
+serde_json = "1"

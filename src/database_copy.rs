@@ -1,0 +1,109 @@
+//! A private copy of a browser's SQLite cookie database. The browser's own file is never
+//! opened, so a running browser is not disturbed.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use crate::files::read_error;
+use crate::private_dir::PrivateDir;
+use crate::{Error, Result};
+
+/// SQLite keeps recent changes in these files next to the database until it merges them.
+/// Without them the copy could miss a login that just happened.
+const SIDECAR_SUFFIXES: &[&str] = &["-wal", "-journal"];
+
+/// A copy of a cookie database in its own private folder. Dropping it deletes the copy
+/// with its folder; anything that opened the copy must be dropped first.
+pub(crate) struct DatabaseCopy {
+    /// Where the copy is.
+    path: PathBuf,
+    /// The private folder holding the copy.
+    _folder: PrivateDir,
+}
+
+impl DatabaseCopy {
+    /// Copies the database at `source`, with its SQLite sidecar files, into a new private
+    /// folder.
+    pub(crate) fn of(source: &Path) -> Result<Self> {
+        let folder = PrivateDir::new()?;
+        let path = copy_database(source, folder.path())?;
+        Ok(Self {
+            path,
+            _folder: folder,
+        })
+    }
+
+    /// Where the copy is.
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+/// Copies the database at `source`, with its SQLite sidecar files, into `folder` and
+/// returns the path of the copy.
+pub(crate) fn copy_database(source: &Path, folder: &Path) -> Result<PathBuf> {
+    if !source.is_file() {
+        return Err(Error::DatabaseNotFound(source.to_owned()));
+    }
+    let file_name = source
+        .file_name()
+        .ok_or_else(|| Error::DatabaseNotFound(source.to_owned()))?;
+    let copy = folder.join(file_name);
+    copy_file(source, &copy)?;
+    for suffix in SIDECAR_SUFFIXES {
+        let mut name = file_name.to_owned();
+        name.push(suffix);
+        let sidecar = source.with_file_name(&name);
+        if sidecar.is_file() {
+            copy_file(&sidecar, &folder.join(name))?;
+        }
+    }
+    Ok(copy)
+}
+
+/// Copies one file, reporting the source path if it fails.
+fn copy_file(from: &Path, to: &Path) -> Result<()> {
+    fs::copy(from, to)
+        .map(|_| ())
+        .map_err(|e| read_error(from, e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn copy_includes_the_sidecar_files() {
+        let profile = PrivateDir::new().unwrap();
+        let copy = PrivateDir::new().unwrap();
+        for name in ["Cookies", "Cookies-wal", "Cookies-journal"] {
+            fs::write(profile.path().join(name), name).unwrap();
+        }
+        let copied = copy_database(&profile.path().join("Cookies"), copy.path()).unwrap();
+        assert_eq!(copied, copy.path().join("Cookies"));
+        for name in ["Cookies", "Cookies-wal", "Cookies-journal"] {
+            assert_eq!(fs::read_to_string(copy.path().join(name)).unwrap(), name);
+        }
+    }
+
+    #[test]
+    fn missing_database_is_its_own_error() {
+        let profile = PrivateDir::new().unwrap();
+        let copy = PrivateDir::new().unwrap();
+        assert!(matches!(
+            copy_database(&profile.path().join("Cookies"), copy.path()),
+            Err(Error::DatabaseNotFound(_))
+        ));
+    }
+
+    #[test]
+    fn the_copy_is_deleted_when_dropped() {
+        let profile = PrivateDir::new().unwrap();
+        fs::write(profile.path().join("cookies.sqlite"), "x").unwrap();
+        let copy = DatabaseCopy::of(&profile.path().join("cookies.sqlite")).unwrap();
+        let path = copy.path().to_owned();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "x");
+        drop(copy);
+        assert!(!path.exists());
+    }
+}
