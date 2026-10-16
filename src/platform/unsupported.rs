@@ -20,6 +20,9 @@ pub(crate) fn default_browser() -> Option<DefaultBrowser> {
     None
 }
 
+/// What the user does when the system refuses a file.
+pub(crate) const PERMISSION_HINT: &str = "allow this app to read it first";
+
 /// Always `false`: no folder is known on this system, so none is protected.
 pub(crate) fn is_protected(_browser: Browser) -> bool {
     false

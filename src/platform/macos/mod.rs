@@ -30,6 +30,10 @@ pub(crate) fn is_protected(browser: Browser) -> bool {
     macos(browser).is_ok_and(|m| m.protected)
 }
 
+/// What the user does when macOS refuses a browser's data: on macOS 27, Safari's, Google
+/// Chrome's and Firefox's need Full Disk Access, and it applies once the app is reopened.
+pub(crate) const PERMISSION_HINT: &str = "turn on Full Disk Access for this app in System Settings > Privacy & Security > Full Disk Access, then quit and reopen it";
+
 /// Always `false`: macOS does not lock files against reading.
 pub(crate) fn is_locked(_error: &std::io::Error) -> bool {
     false

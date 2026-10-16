@@ -20,6 +20,7 @@ All notable changes to this library. The format follows [Keep a Changelog](https
 - Arc and Google Chrome are tested on a real Mac (macOS 27): `find_logins` finds the login and `read_cookies` reads it after the Keychain dialog; yt-dlp downloads with Arc's cookie file. The other Chromium browsers are still not tested.
 
 ### Changed
+- On macOS, `Error::PermissionNeeded` now says what to do: turn on Full Disk Access for the app in System Settings > Privacy & Security > Full Disk Access, then quit and reopen it. It was "allow this app to read it first", which Windows keeps.
 - On macOS 27, the system refuses Google Chrome's and Firefox's data folders, without a dialog, to an app that does not have Full Disk Access; Arc's and Dia's are not protected. `find_logins` then lists Chrome and Firefox in `Scan::skipped` with `PermissionNeeded`. With Full Disk Access, Chrome, Firefox and Safari are read. Seen on a real Mac.
 - Every failure to read a browser file or folder is reported the same way: `PermissionNeeded` when the system refuses access (it was `DatabaseUnreadable` for profile folders, `profiles.ini` and `Local State`), `DatabaseLocked` when the running browser locks it, `DatabaseNotFound` when it is missing.
 - **Breaking:** `Engine` is `non_exhaustive`, so a `match` on it needs a wildcard arm. New engines can then be added without another breaking change.
