@@ -37,8 +37,9 @@ pub enum Error {
     UnsupportedDatabaseVersion(i64),
     /// The user said no to the operating system's permission dialog.
     KeyAccessDenied,
-    /// The operating system protects this file, and the user has not allowed this app to
-    /// read it yet (Safari's cookie file on macOS).
+    /// The operating system protects this file or folder, and the user has not allowed this
+    /// app to read it yet. On macOS 27 that is Safari's, Google Chrome's and Firefox's data
+    /// without Full Disk Access; the message says where to allow it.
     PermissionNeeded(PathBuf),
     /// The browser's key was not found (for example the browser was never opened).
     KeyNotFound,
@@ -106,8 +107,9 @@ impl fmt::Display for Error {
             Error::KeyAccessDenied => write!(f, "access to the browser's key was denied"),
             Error::PermissionNeeded(path) => write!(
                 f,
-                "the system protects {}; allow this app to read it first",
-                path.display()
+                "the system protects {}; {}",
+                path.display(),
+                crate::platform::PERMISSION_HINT
             ),
             Error::KeyNotFound => write!(f, "the browser's key was not found"),
             Error::InvalidKey => write!(f, "the browser's key does not have the expected format"),
@@ -174,6 +176,10 @@ mod tests {
             (Error::UnsupportedDatabaseVersion(25), "25"),
             (Error::KeyAccessDenied, "denied"),
             (Error::PermissionNeeded(path()), "/tmp/Cookies"),
+            (
+                Error::PermissionNeeded(path()),
+                crate::platform::PERMISSION_HINT,
+            ),
             (Error::KeyNotFound, "not found"),
             (Error::InvalidKey, "format"),
             (Error::KeyUnavailable(-25308), "-25308"),

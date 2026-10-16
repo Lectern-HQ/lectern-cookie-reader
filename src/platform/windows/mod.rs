@@ -58,6 +58,9 @@ pub(crate) fn is_locked(error: &std::io::Error) -> bool {
     u32::try_from(error.raw_os_error().unwrap_or_default()) == Ok(ERROR_SHARING_VIOLATION)
 }
 
+/// What the user does when Windows refuses a browser's file.
+pub(crate) const PERMISSION_HINT: &str = "allow this app to read it first";
+
 /// Always `false`: no browser folder this crate reads on Windows is protected.
 pub(crate) fn is_protected(_browser: Browser) -> bool {
     false
