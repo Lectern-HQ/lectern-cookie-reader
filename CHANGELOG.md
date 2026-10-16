@@ -2,7 +2,7 @@
 
 All notable changes to this library. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/) (before 1.0, a minor version may break the API).
 
-## [Unreleased]
+## [0.4.0] - 2026-10-16
 
 ### Added
 - Safari on macOS (`safari` in the catalog, `Engine::Safari`): a parser for `Cookies.binarycookies`, and `read_cookies` for a Safari profile. macOS protects the file, so the app asks the user to pick it in a file dialog; `find_logins` never reads it and lists Safari in `Scan::skipped` with the new `Error::PermissionNeeded`. `default_browser()` now matches Safari. Tested on a real Mac (macOS 27): with Full Disk Access for the reading app, `read_cookies` reads Safari's file and yt-dlp downloads with the cookie file, and `default_browser()` matches Safari. The file dialog route is not tested yet.
@@ -56,6 +56,7 @@ All notable changes to this library. The format follows [Keep a Changelog](https
 - Dia on macOS.
 
 [Unreleased]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.3.0...HEAD
+[0.4.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/releases/tag/v0.1.0
