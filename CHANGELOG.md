@@ -2,6 +2,12 @@
 
 All notable changes to this library. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/) (before 1.0, a minor version may break the API).
 
+## [Unreleased]
+
+### Added
+- `cookies_from_netscape(text, host)`: reads a Netscape `cookies.txt` (as browser extensions, yt-dlp and curl write it) and returns its unexpired cookies for `host`, with the same domain rules as `read_cookies`. Accepts comment lines, the `#HttpOnly_` prefix, CRLF line ends and a byte order mark. Cookies of other sites are never returned.
+- `Error::InvalidCookieFile`: a line of a `cookies.txt` is not in Netscape format. Only the line number is given, never its content.
+
 ## [0.4.0] - 2026-10-16
 
 ### Added

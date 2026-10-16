@@ -52,6 +52,12 @@ pub enum Error {
         /// The cookie's name, never its value.
         cookie_name: String,
     },
+    /// A line of a `cookies.txt` is not in Netscape format. Only its number is given, never
+    /// its content, which may be another site's cookie.
+    InvalidCookieFile {
+        /// The line's number, from 1.
+        line: usize,
+    },
     /// A cookie field contains a tab or a line break, which would break the cookie file.
     InvalidCookie {
         /// The cookie's name, with tabs and line breaks escaped.
@@ -118,6 +124,12 @@ impl fmt::Display for Error {
             }
             Error::DecryptionFailed { cookie_name } => {
                 write!(f, "cookie {cookie_name:?} could not be decrypted")
+            }
+            Error::InvalidCookieFile { line } => {
+                write!(
+                    f,
+                    "line {line} of the cookies.txt is not in Netscape format"
+                )
             }
             Error::InvalidCookie { cookie_name } => {
                 write!(
@@ -195,6 +207,7 @@ mod tests {
                 },
                 "line break",
             ),
+            (Error::InvalidCookieFile { line: 3 }, "line 3"),
             (
                 Error::HostHashMismatch {
                     cookie_name: "session".into(),
