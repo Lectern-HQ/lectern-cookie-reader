@@ -4,7 +4,7 @@
 use zeroize::Zeroizing;
 
 use crate::clock::now_unix;
-use crate::domain::domains_for;
+use crate::domain::{domains_for, is_sent};
 use crate::{Cookie, Error, Result, SecretValue};
 
 /// The first line of a Netscape cookie file, which readers check for.
@@ -64,8 +64,7 @@ fn from_netscape_at(text: &str, host: &str, now: i64) -> Result<Vec<Cookie>> {
         };
         let cookie =
             parse_line(line, http_only).ok_or(Error::InvalidCookieFile { line: index + 1 })?;
-        let unexpired = cookie.expires.is_none_or(|expires| expires > now);
-        if unexpired && domains.contains(&cookie.domain) {
+        if is_sent(&cookie.domain, cookie.expires, &domains, now) {
             cookies.push(cookie);
         }
     }

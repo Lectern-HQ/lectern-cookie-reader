@@ -59,7 +59,7 @@ pub(crate) fn is_locked(error: &std::io::Error) -> bool {
 }
 
 /// What the user does when Windows refuses a browser's file.
-pub(crate) const PERMISSION_HINT: &str = "allow this app to read it first";
+pub(crate) const PERMISSION_HINT: &str = super::ALLOW_READING_HINT;
 
 /// Always `false`: no browser folder this crate reads on Windows is protected.
 pub(crate) fn is_protected(_browser: Browser) -> bool {

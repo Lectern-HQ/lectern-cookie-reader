@@ -46,40 +46,7 @@ struct Section {
 /// The profiles listed in `text`, the content of the `profiles.ini` in `data_dir`, the
 /// default profile first, then by name. Sections without a path are left out.
 pub(crate) fn parse(text: &str, data_dir: &Path) -> Vec<IniProfile> {
-    let mut sections: Vec<Section> = Vec::new();
-    let mut install_defaults: Vec<String> = Vec::new();
-    let mut current = Current::Other;
-    for line in text.lines().map(str::trim) {
-        if let Some(header) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
-            current = if header.starts_with("Profile") {
-                sections.push(Section {
-                    is_relative: true,
-                    ..Section::default()
-                });
-                Current::Profile
-            } else if header.starts_with("Install") {
-                Current::Install
-            } else {
-                Current::Other
-            };
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        let (key, value) = (key.trim(), value.trim());
-        match (current, sections.last_mut()) {
-            (Current::Install, _) if key == "Default" => install_defaults.push(value.to_owned()),
-            (Current::Profile, Some(section)) => match key {
-                "Name" => section.name = Some(value.to_owned()),
-                "Path" => section.path = Some(value.to_owned()),
-                "IsRelative" => section.is_relative = value != "0",
-                "Default" => section.is_default = value == "1",
-                _ => {}
-            },
-            _ => {}
-        }
-    }
+    let (sections, install_defaults) = read_sections(text);
     let default_path: Option<String> = install_defaults.into_iter().next().or_else(|| {
         sections
             .iter()
@@ -101,8 +68,51 @@ pub(crate) fn parse(text: &str, data_dir: &Path) -> Vec<IniProfile> {
     profiles
 }
 
+/// The `[Profile...]` sections of `text`, in order, and the `Default=` paths of its
+/// `[Install...]` sections (the profile each Firefox installation uses).
+fn read_sections(text: &str) -> (Vec<Section>, Vec<String>) {
+    let mut sections: Vec<Section> = Vec::new();
+    let mut install_defaults: Vec<String> = Vec::new();
+    let mut current = Current::Other;
+    for line in text.lines().map(str::trim) {
+        if let Some(header) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            current = Current::of(header);
+            if current == Current::Profile {
+                sections.push(Section {
+                    is_relative: true,
+                    ..Section::default()
+                });
+            }
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let (key, value) = (key.trim(), value.trim());
+        match (current, sections.last_mut()) {
+            (Current::Install, _) if key == "Default" => install_defaults.push(value.to_owned()),
+            (Current::Profile, Some(section)) => section.set(key, value),
+            _ => {}
+        }
+    }
+    (sections, install_defaults)
+}
+
+impl Section {
+    /// Records one `key=value` line of a `[Profile...]` section; other keys are ignored.
+    fn set(&mut self, key: &str, value: &str) {
+        match key {
+            "Name" => self.name = Some(value.to_owned()),
+            "Path" => self.path = Some(value.to_owned()),
+            "IsRelative" => self.is_relative = value != "0",
+            "Default" => self.is_default = value == "1",
+            _ => {}
+        }
+    }
+}
+
 /// The kind of section the parser is in.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Current {
     /// A `[Profile...]` section.
     Profile,
@@ -110,6 +120,19 @@ enum Current {
     Install,
     /// Any other section, such as `[General]`.
     Other,
+}
+
+impl Current {
+    /// The kind of the section named `header` (the text between the brackets).
+    fn of(header: &str) -> Self {
+        if header.starts_with("Profile") {
+            Current::Profile
+        } else if header.starts_with("Install") {
+            Current::Install
+        } else {
+            Current::Other
+        }
+    }
 }
 
 /// The folder a `Path=` value points to. Relative paths use `/` on every system.
