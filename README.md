@@ -4,7 +4,7 @@ A small Rust library that reads the login cookies for **one website** from a bro
 
 It is the part of [Lectern](https://github.com/Lectern-HQ) that touches your browser data, published so anyone can check exactly what it does.
 
-Status: version 0.3.0 is released; the next version adds the Firefox family, Safari and Windows (see [CHANGELOG.md](CHANGELOG.md)). Reading cookies is tested with Dia on macOS; every other browser and Windows are in the library but not tested on a real computer yet.
+Status: version 0.3.0 is released; the next version adds the Firefox family, Safari and Windows (see [CHANGELOG.md](CHANGELOG.md)). Reading cookies is tested on macOS with Arc, Dia, Google Chrome, Firefox and Safari; the other browsers and Windows are in the library but not tested on a real computer yet.
 
 ## Usage
 
@@ -95,14 +95,18 @@ Every error says what failed, never a cookie value. The ones an app usually hand
 | Browser | macOS | Windows |
 | --- | --- | --- |
 | Dia | Tested | Not available |
-| Brave, Google Chrome, Chromium, Microsoft Edge, Opera, Vivaldi | In the catalog, not tested yet ([#54](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/54)) | In the library, not tested yet ([#20](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/20)); Chrome and Edge cookies with app-bound encryption are reported, not read |
-| Arc | In the catalog, not tested yet ([#54](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/54)) | Not supported |
-| Firefox, Floorp, LibreWolf, Waterfox, Zen | In the catalog, not tested yet ([#6](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/6)) | In the library, not tested yet ([#20](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/20)) |
-| Safari | In the catalog, not tested yet; needs your permission to read its protected cookie file ([#7](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/7)) | Not available |
+| Google Chrome | Tested; needs Full Disk Access on macOS 27 | In the library, not tested yet ([#20](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/20)); cookies with app-bound encryption are reported, not read |
+| Brave, Chromium, Microsoft Edge, Opera, Vivaldi | In the catalog, not tested yet ([#54](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/54)) | In the library, not tested yet ([#20](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/20)); Chrome and Edge cookies with app-bound encryption are reported, not read |
+| Arc | Tested | Not supported |
+| Firefox | Tested; needs Full Disk Access on macOS 27 | In the library, not tested yet ([#20](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/20)) |
+| Floorp, LibreWolf, Waterfox, Zen | In the catalog, not tested yet ([#6](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/6)) | In the library, not tested yet ([#20](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/20)) |
+| Safari | Tested with Full Disk Access; the file dialog route is not tested yet ([#7](https://github.com/Lectern-HQ/lectern-cookie-reader/issues/7)) | Not available |
 
 Finding which browser and profile is logged in (`find_logins`, `suggest`) covers every browser in the catalog except Safari. macOS protects Safari's cookie file, so `find_logins` never reads it and lists Safari in `skipped` with `PermissionNeeded` instead of causing a dialog.
 
-To read Safari, let the user pick `Cookies.binarycookies` in a file dialog opened at `Browser::by_id("safari")?.default_profile()?.path`. Then call `read_cookies` with a `Profile` whose `path` is the folder of the picked file. If macOS still refuses, the only other route is Full Disk Access for the app, which gives it access to all of the user's files: explain that before asking.
+To read Safari, let the user pick `Cookies.binarycookies` in a file dialog opened at `Browser::by_id("safari")?.default_profile()?.path`. Then call `read_cookies` with a `Profile` whose `path` is the folder of the picked file. If macOS still refuses, the only other route is Full Disk Access for the app, which gives it access to all of the user's files: explain that before asking. Full Disk Access was checked on a real Mac and works; the file dialog route was not checked yet.
+
+On macOS 27, Google Chrome's and Firefox's data folders are protected too: without Full Disk Access, the system refuses them without a dialog, and `find_logins` lists them in `skipped` with `PermissionNeeded`. Arc's and Dia's are not protected.
 
 ## Development
 
