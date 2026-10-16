@@ -58,6 +58,7 @@ pub use domain::host_of_link;
 pub use error::Error;
 pub use leftovers::remove_leftovers;
 pub use logins::{Checked, Login, Scan, Skipped, find_logins};
+pub use netscape::cookies_from_netscape;
 pub use profile::Profile;
 pub use reader::read_cookies;
 pub use signals::clean_up_on_signals;

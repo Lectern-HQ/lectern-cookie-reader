@@ -57,6 +57,21 @@ The suggestion is a profile logged in to the site (most recently used first), el
 system's default browser, else the most recently used profile. Show it for the user to
 confirm: the default browser is often not the one used for lectures.
 
+When the browser cannot be read (Safari, Chrome or Edge with app-bound encryption on
+Windows), the user can export a `cookies.txt` with a browser extension instead. Read only
+the site's cookies from it, with the same domain rules, and write them to a `CookieFile`:
+
+```rust
+use lectern_cookie_reader::{CookieFile, Error, cookies_from_netscape};
+
+fn from_export(text: &str, host: &str) -> Result<CookieFile, Error> {
+    let cookies = cookies_from_netscape(text, host)?; // other sites' cookies are skipped
+    CookieFile::create(&cookies)
+}
+```
+
+A line that is not in Netscape format is reported by its number only, never its content.
+
 ### Errors
 
 Every error says what failed, never a cookie value. The ones an app usually handles:
