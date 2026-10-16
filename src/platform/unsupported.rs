@@ -30,6 +30,11 @@ pub(crate) fn is_locked(_error: &std::io::Error) -> bool {
     false
 }
 
+/// Always `None`: whether a process runs is not asked on this system.
+pub(crate) fn is_running(_pid: u32) -> Option<bool> {
+    None
+}
+
 /// The error that names the browser and says only macOS is supported for now.
 fn unsupported(browser: Browser) -> Error {
     Error::Unsupported(format!(

@@ -6,24 +6,28 @@
 //! - `default_browser()`: the browser that opens links, if the system says.
 //! - `is_protected(browser)`: whether the system protects the browser's data folder.
 //! - `is_locked(error)`: whether a read failed because another program locked the file.
+//! - `is_running(pid)`: whether a process is still running, if that can be told.
 
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
-pub(crate) use macos::{chromium_key, default_browser, is_locked, is_protected, user_data_dir};
+pub(crate) use macos::{
+    chromium_key, default_browser, is_locked, is_protected, is_running, user_data_dir,
+};
 
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
 pub(crate) use windows::{
-    chromium_key, create_owner_only_dir, default_browser, is_locked, is_protected, user_data_dir,
+    chromium_key, create_owner_only_dir, default_browser, is_locked, is_protected, is_running,
+    user_data_dir,
 };
 
 #[cfg(not(any(target_os = "macos", windows)))]
 mod unsupported;
 #[cfg(not(any(target_os = "macos", windows)))]
 pub(crate) use unsupported::{
-    chromium_key, default_browser, is_locked, is_protected, user_data_dir,
+    chromium_key, default_browser, is_locked, is_protected, is_running, user_data_dir,
 };
 
 /// `browser`'s details for `system`, or [`crate::Error::Unsupported`] when the catalog has

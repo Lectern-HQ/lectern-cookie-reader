@@ -11,6 +11,9 @@ use crate::{Error, Result};
 /// How many unused names to try before giving up.
 const ATTEMPTS: u32 = 8;
 
+/// The start of every work folder's name, followed by `{pid}-{nanos}-{counter}`.
+const PREFIX: &str = concat!(env!("CARGO_PKG_NAME"), "-");
+
 /// A temporary folder that only the current user can open, removed when dropped.
 pub(crate) struct PrivateDir {
     /// Where the folder is.
@@ -18,8 +21,10 @@ pub(crate) struct PrivateDir {
 }
 
 impl PrivateDir {
-    /// Creates a new folder in the system's temporary folder.
+    /// Creates a new folder in the system's temporary folder. The first time in a process,
+    /// it first removes the folders that ended processes left there.
     pub(crate) fn new() -> Result<Self> {
+        crate::leftovers::remove_once();
         Self::new_in(&std::env::temp_dir())
     }
 
@@ -84,11 +89,41 @@ fn unique_name() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    format!(
-        "lectern-cookie-reader-{}-{nanos}-{}",
+    folder_name(
         std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
+        nanos,
+        COUNTER.fetch_add(1, Ordering::Relaxed),
     )
+}
+
+/// The work folder name for process `pid`, made at `nanos` with `counter`. The only place
+/// that writes the name format; [`owner_pid`] reads it back.
+pub(crate) fn folder_name(pid: u32, nanos: u128, counter: u64) -> String {
+    format!("{PREFIX}{pid}-{nanos}-{counter}")
+}
+
+/// Removes each folder in `paths` with everything in it, and returns how many it removed.
+/// A folder that cannot be removed, or is already gone, is not counted.
+pub(crate) fn remove_folders(paths: impl IntoIterator<Item = PathBuf>) -> usize {
+    paths
+        .into_iter()
+        .filter(|path| fs::remove_dir_all(path).is_ok())
+        .count()
+}
+
+/// The id of the process that made the work folder `name`, or `None` if `name` is not
+/// exactly a name [`unique_name`] makes.
+pub(crate) fn owner_pid(name: &str) -> Option<u32> {
+    let mut parts = name.strip_prefix(PREFIX)?.split('-');
+    let pid = digits(parts.next()?)?.parse().ok()?;
+    digits(parts.next()?)?.parse::<u128>().ok()?;
+    digits(parts.next()?)?.parse::<u64>().ok()?;
+    parts.next().is_none().then_some(pid)
+}
+
+/// `part` if it is one or more ASCII digits and nothing else.
+fn digits(part: &str) -> Option<&str> {
+    (!part.is_empty() && part.bytes().all(|b| b.is_ascii_digit())).then_some(part)
 }
 
 #[cfg(test)]
@@ -114,6 +149,40 @@ mod tests {
         }));
         assert!(result.is_err());
         assert!(!kept.unwrap().exists());
+    }
+
+    #[test]
+    fn the_owner_is_read_back_from_a_made_name() {
+        assert_eq!(owner_pid(&unique_name()), Some(std::process::id()));
+        assert_eq!(owner_pid(&folder_name(42, 1, 5)), Some(42));
+    }
+
+    #[test]
+    fn any_other_name_has_no_owner() {
+        let malformed = [
+            "42-1-",
+            "42-1",
+            "42-1-5-6",
+            "+42-1-5",
+            "x-1-5",
+            "99999999999-1-5",
+        ];
+        for name in malformed.map(|rest| format!("{PREFIX}{rest}")) {
+            assert_eq!(owner_pid(&name), None, "{name}");
+        }
+        assert_eq!(owner_pid("other-42-1-5"), None);
+        assert_eq!(owner_pid(""), None);
+    }
+
+    #[test]
+    fn removed_folders_are_counted_once() {
+        let parent = PrivateDir::new().unwrap();
+        let folder = parent.path().join("a");
+        fs::create_dir(&folder).unwrap();
+        fs::write(folder.join("file"), "x").unwrap();
+        let missing = parent.path().join("missing");
+        assert_eq!(remove_folders([folder.clone(), missing]), 1);
+        assert!(!folder.exists());
     }
 
     #[test]

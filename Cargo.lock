@@ -305,6 +305,7 @@ dependencies = [
  "cbc",
  "core-foundation",
  "core-foundation-sys",
+ "libc",
  "pbkdf2",
  "rusqlite",
  "security-framework",

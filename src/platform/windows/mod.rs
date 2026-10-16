@@ -4,6 +4,7 @@
 
 mod dpapi;
 mod owner_only;
+mod process;
 
 use std::path::PathBuf;
 
@@ -16,6 +17,7 @@ use crate::chromium::local_state;
 use crate::{Browser, DefaultBrowser, Error, Result};
 
 pub(crate) use owner_only::create_owner_only_dir;
+pub(crate) use process::is_running;
 
 /// The browser's Windows details, or an error if it is not read on Windows.
 fn windows(browser: Browser) -> Result<&'static Windows> {
