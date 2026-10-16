@@ -37,6 +37,10 @@ struct Options {
 }
 
 fn main() -> ExitCode {
+    if let Err(error) = lectern_cookie_reader::clean_up_on_signals() {
+        eprintln!("error: {error}");
+        return ExitCode::FAILURE;
+    }
     match options(std::env::args().skip(1).collect()) {
         Ok(options) => match run(&options) {
             Ok(()) => ExitCode::SUCCESS,
