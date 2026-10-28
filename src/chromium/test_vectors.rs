@@ -73,9 +73,9 @@ pub(crate) struct Row<'a> {
 
 pub(crate) use crate::clock::tests::NOW;
 
-/// A first-party cookie for the path `/`, whose value is the `V24` vector, encrypted for `.example.com`,
-/// set by an `https` page 100 seconds before `NOW` and last sent to the site 10 seconds
-/// before `NOW`.
+/// A first-party cookie for the path `/`, whose value is the `V24` vector, encrypted for
+/// `.example.com`. It was set by an `https` page 100 seconds before `NOW` and last sent to
+/// the site 10 seconds before `NOW`.
 pub(crate) fn row<'a>(domain: &'a str, name: &'a str, expires: Option<i64>) -> Row<'a> {
     Row {
         domain,
@@ -91,34 +91,40 @@ pub(crate) fn row<'a>(domain: &'a str, name: &'a str, expires: Option<i64>) -> R
 }
 
 impl<'a> Row<'a> {
+    /// Last sent to the site at `unix_secs`.
     pub(crate) fn last_used(mut self, unix_secs: i64) -> Self {
         self.last_used = unix_secs;
         self
     }
 
+    /// Stored as `stored` in `encrypted_value`.
     pub(crate) fn value(mut self, stored: &[u8]) -> Self {
         self.value = stored.to_vec();
         self
     }
 
-    /// Set while the site was embedded in a page of `site`, for example
-    /// `https://other.com`.
+    /// Partitioned: set while the site was embedded in a page of `site` (stored as
+    /// `top_frame_site_key`), for example `https://other.com`.
     pub(crate) fn partitioned(mut self, site: &'a str) -> Self {
         self.top_frame_site = site;
         self
     }
 
+    /// Created at `unix_secs` (`creation_utc`), which decides which of two rows of one
+    /// cookie is kept.
     pub(crate) fn created(mut self, unix_secs: i64) -> Self {
         self.created = unix_secs;
         self
     }
 
+    /// For the path `path` on the site instead of `/`.
     pub(crate) fn path(mut self, path: &'a str) -> Self {
         self.path = path;
         self
     }
 
-    /// Set by a page on `port`.
+    /// Set by a page on `port` (`source_port`) instead of 443. Two rows of one cookie must
+    /// differ in it, or the unique index refuses the second.
     pub(crate) fn port(mut self, port: u16) -> Self {
         self.port = port;
         self
