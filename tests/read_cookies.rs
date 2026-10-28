@@ -38,7 +38,13 @@ impl TestProfile {
             .unwrap();
         for host in hosts {
             conn.execute(
-                "INSERT INTO cookies VALUES (?1, 'session', '/', 1, 1, 0, 0, 0, x'00')",
+                "INSERT INTO cookies (
+                    creation_utc, host_key, top_frame_site_key, name, value, encrypted_value,
+                    path, expires_utc, is_secure, is_httponly, last_access_utc, has_expires,
+                    is_persistent, priority, samesite, source_scheme, source_port,
+                    last_update_utc, source_type, has_cross_site_ancestor)
+                 VALUES (0, ?1, '', 'session', '', x'00', '/', 0, 1, 1, 0, 0, 0, 1, -1, 2,
+                         443, 0, 0, 0)",
                 [host],
             )
             .unwrap();

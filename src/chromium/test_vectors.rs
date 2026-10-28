@@ -47,6 +47,15 @@ pub(crate) fn gcm_key() -> ChromiumKey {
 /// The schema of a Chromium cookie database, shared with the tests of the public API.
 const SCHEMA: &str = include_str!("../../tests/fixtures/chromium_cookies.sql");
 
+/// Inserts one cookie of a secure `https` page on port 443, sent with medium priority and
+/// no `SameSite` attribute, as Chromium stores them.
+const INSERT_COOKIE: &str = "INSERT INTO cookies (
+        creation_utc, host_key, top_frame_site_key, name, value, encrypted_value, path,
+        expires_utc, is_secure, is_httponly, last_access_utc, has_expires, is_persistent,
+        priority, samesite, source_scheme, source_port, last_update_utc, source_type,
+        has_cross_site_ancestor)
+    VALUES (?5, ?1, '', ?2, '', ?6, '/', ?4, 1, 1, ?5, ?3, ?3, 1, -1, 2, 443, ?5, 0, 0)";
+
 pub(crate) struct Row<'a> {
     domain: &'a str,
     name: &'a str,
@@ -90,7 +99,7 @@ pub(crate) fn create_db(folder: &Path, version: &str, rows: &[Row]) -> PathBuf {
         .unwrap();
     for r in rows {
         conn.execute(
-            "INSERT INTO cookies VALUES (?1, ?2, '/', 1, 1, ?3, ?4, ?5, ?6)",
+            INSERT_COOKIE,
             rusqlite::params![
                 r.domain,
                 r.name,
