@@ -47,38 +47,50 @@ pub(crate) fn gcm_key() -> ChromiumKey {
 /// The schema of a Chromium cookie database, shared with the tests of the public API.
 const SCHEMA: &str = include_str!("../../tests/fixtures/chromium_cookies.sql");
 
-/// Inserts one cookie of a secure `https` page on port 443, sent with medium priority and
-/// no `SameSite` attribute, as Chromium stores them.
+/// Inserts one cookie of a secure `https` page, sent with medium priority and no
+/// `SameSite` attribute, as Chromium stores them.
 const INSERT_COOKIE: &str = "INSERT INTO cookies (
         creation_utc, host_key, top_frame_site_key, name, value, encrypted_value, path,
         expires_utc, is_secure, is_httponly, last_access_utc, has_expires, is_persistent,
         priority, samesite, source_scheme, source_port, last_update_utc, source_type,
         has_cross_site_ancestor)
-    VALUES (?5, ?1, '', ?2, '', ?6, '/', ?4, 1, 1, ?5, ?3, ?3, 1, -1, 2, 443, ?5, 0, 0)";
+    VALUES (?8, ?1, ?7, ?2, '', ?6, ?10, ?4, 1, 1, ?5, ?3, ?3, 1, -1, 2, ?9, ?8, 0, 0)";
+
+/// The port of an `https` page.
+const HTTPS_PORT: u16 = 443;
 
 pub(crate) struct Row<'a> {
     domain: &'a str,
     name: &'a str,
+    path: &'a str,
     expires: Option<i64>,
     last_used: i64,
     value: Vec<u8>,
+    top_frame_site: &'a str,
+    created: i64,
+    port: u16,
 }
 
 pub(crate) use crate::clock::tests::NOW;
 
-/// A cookie whose value is the `V24` vector, encrypted for `.example.com`, last sent to
-/// the site 10 seconds before `NOW`.
+/// A first-party cookie for the path `/`, whose value is the `V24` vector, encrypted for `.example.com`,
+/// set by an `https` page 100 seconds before `NOW` and last sent to the site 10 seconds
+/// before `NOW`.
 pub(crate) fn row<'a>(domain: &'a str, name: &'a str, expires: Option<i64>) -> Row<'a> {
     Row {
         domain,
         name,
+        path: "/",
         expires,
         last_used: NOW - 10,
         value: hex(V24),
+        top_frame_site: "",
+        created: NOW - 100,
+        port: HTTPS_PORT,
     }
 }
 
-impl Row<'_> {
+impl<'a> Row<'a> {
     pub(crate) fn last_used(mut self, unix_secs: i64) -> Self {
         self.last_used = unix_secs;
         self
@@ -88,9 +100,33 @@ impl Row<'_> {
         self.value = stored.to_vec();
         self
     }
+
+    /// Set while the site was embedded in a page of `site`, for example
+    /// `https://other.com`.
+    pub(crate) fn partitioned(mut self, site: &'a str) -> Self {
+        self.top_frame_site = site;
+        self
+    }
+
+    pub(crate) fn created(mut self, unix_secs: i64) -> Self {
+        self.created = unix_secs;
+        self
+    }
+
+    pub(crate) fn path(mut self, path: &'a str) -> Self {
+        self.path = path;
+        self
+    }
+
+    /// Set by a page on `port`.
+    pub(crate) fn port(mut self, port: u16) -> Self {
+        self.port = port;
+        self
+    }
 }
 
-/// Writes a generated cookie database named `Cookies` into `folder`.
+/// Writes a generated cookie database named `Cookies` into `folder`, with `rows` in their
+/// order.
 pub(crate) fn create_db(folder: &Path, version: &str, rows: &[Row]) -> PathBuf {
     let path = folder.join("Cookies");
     let conn = rusqlite::Connection::open(&path).unwrap();
@@ -106,7 +142,11 @@ pub(crate) fn create_db(folder: &Path, version: &str, rows: &[Row]) -> PathBuf {
                 r.expires.is_some(),
                 r.expires.map_or(0, unix_to_chromium),
                 unix_to_chromium(r.last_used),
-                r.value
+                r.value,
+                r.top_frame_site,
+                unix_to_chromium(r.created),
+                r.port,
+                r.path
             ],
         )
         .unwrap();

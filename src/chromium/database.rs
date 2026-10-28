@@ -1,5 +1,16 @@
 //! The Chromium cookie database: its schema for the shared SQLite store, and what only
 //! Chromium does, finding app-bound values and decrypting values with the browser's key.
+//!
+//! Only first-party cookies are read: `top_frame_site_key` is empty. Partitioned cookies,
+//! set while the site was embedded in another site's page, are not the ones the browser
+//! sends when the user opens the site in a normal tab, so they are left out. Chromium
+//! added the column in schema version 15, and only versions from
+//! [`crypto::MIN_DB_VERSION`] on are opened, so every database read here has it.
+//!
+//! A cookie can be stored more than once for the same domain, name and path, for example
+//! when pages on two ports set it. Only one row of each is kept, as Chromium does when it
+//! loads the database: the one created last (`creation_utc`), and of rows created at the
+//! same time, the one stored last (`rowid`).
 
 use std::path::{Path, PathBuf};
 
@@ -15,8 +26,8 @@ const DATABASE_FILE: &str = "Cookies";
 /// Since Chrome 96 on Windows the database is in this subfolder of the profile.
 const NETWORK_FOLDER: &str = "Network";
 /// The columns [`read`] builds a cookie from, in the order it reads them.
-const COOKIE_COLUMNS: &str =
-    "host_key, name, path, is_secure, is_httponly, has_expires, expires_utc, encrypted_value";
+const COOKIE_COLUMNS: &str = "host_key, name, path, is_secure, is_httponly, has_expires, \
+     expires_utc, encrypted_value, creation_utc, rowid";
 /// The condition for a value with app-bound encryption; `?` is its version marker.
 const APP_BOUND_CONDITION: &str = "substr(encrypted_value, 1, 3) = ?";
 
@@ -30,7 +41,8 @@ impl Schema for ChromiumSchema {
     const TABLE: &'static str = "cookies";
     const HOST: &'static str = "host_key";
     const LAST_ACCESS: &'static str = "last_access_utc";
-    const SENDABLE: &'static str = "(has_expires = 0 OR expires_utc > ?1)";
+    const SENDABLE: &'static str =
+        "(has_expires = 0 OR expires_utc > ?1) AND top_frame_site_key = ''";
 
     /// `Network\Cookies` where it exists (Windows), else `Cookies`.
     fn database_path(profile_dir: &Path) -> PathBuf {
@@ -81,9 +93,16 @@ struct Encrypted {
     expires: Option<i64>,
     /// `encrypted_value`.
     value: Vec<u8>,
+    /// `creation_utc`, then `rowid`: of two rows of one cookie, the greater is kept.
+    stored: (i64, i64),
 }
 
 impl Encrypted {
+    /// What makes two rows the same cookie: domain, name and path.
+    fn cookie_key(&self) -> (&str, &str, &str) {
+        (&self.domain, &self.name, &self.path)
+    }
+
     /// The cookie, with its value decrypted with `key` for a database of `db_version`.
     fn decrypt(self, key: &ChromiumKey, db_version: i64) -> Result<Cookie> {
         let value = crypto::decrypt_value(&self.value, key, &self.domain, &self.name, db_version)?;
@@ -146,11 +165,26 @@ pub(crate) fn read(
             http_only: row.get(4)?,
             expires: has_expiry.then(|| chromium_to_unix(expiry)),
             value: row.get(7)?,
+            stored: (row.get(8)?, row.get(9)?),
         })
     })?;
-    rows.into_iter()
+    newest_of_each(rows)
+        .into_iter()
         .map(|row| row.decrypt(key, store.version()))
         .collect()
+}
+
+/// One row per cookie: of the rows with the same domain, name and path, the one created
+/// last, then stored last. Sorted by domain, name and path, so the order never depends on
+/// how SQLite returns the rows.
+fn newest_of_each(mut rows: Vec<Encrypted>) -> Vec<Encrypted> {
+    rows.sort_by(|a, b| {
+        a.cookie_key()
+            .cmp(&b.cookie_key())
+            .then(b.stored.cmp(&a.stored))
+    });
+    rows.dedup_by(|row, kept| row.cookie_key() == kept.cookie_key());
+    rows
 }
 
 #[cfg(test)]
@@ -185,6 +219,72 @@ mod tests {
         assert_eq!(cookies[1].expires, Some(NOW + 60));
         assert!(cookies[1].secure && cookies[1].http_only);
         assert_eq!(cookies[0].expires, None);
+    }
+
+    #[test]
+    fn partitioned_cookies_are_left_out() {
+        let dir = PrivateDir::new().unwrap();
+        let embedded = "https://other.com";
+        create_db(
+            dir.path(),
+            "24",
+            &[
+                row(".example.com", "session", Some(NOW + 60)),
+                row(".example.com", "session", Some(NOW + 120))
+                    .partitioned(embedded)
+                    .last_used(NOW - 1),
+                row(".example.com", "embedded", None).partitioned(embedded),
+                row(".example.com", "bound", None)
+                    .partitioned(embedded)
+                    .value(b"v20sealed"),
+            ],
+        );
+        let store = ChromiumStore::of(dir.path()).unwrap();
+        let domains = candidate_domains("example.com");
+
+        let cookies = read(&store, &domains, &key(), NOW).unwrap();
+        assert_eq!(cookies.len(), 1);
+        assert_eq!(cookies[0].name, "session");
+        assert_eq!(cookies[0].expires, Some(NOW + 60));
+        assert_eq!(store.last_used_for(&domains, NOW).unwrap(), Some(NOW - 10));
+        assert!(!uses_app_bound_encryption(&store, &domains, NOW).unwrap());
+    }
+
+    #[test]
+    fn a_cookie_stored_twice_keeps_the_newest_row() {
+        let dir = PrivateDir::new().unwrap();
+        create_db(
+            dir.path(),
+            "24",
+            &[
+                // Set again by a page on another port: the newer one is listed first.
+                row(".example.com", "session", Some(NOW + 120))
+                    .created(NOW - 20)
+                    .port(8443),
+                row(".example.com", "session", Some(NOW + 60)).created(NOW - 50),
+                // Set at the same time: the row stored last wins.
+                row(".example.com", "tie", Some(NOW + 60)).created(NOW - 30),
+                row(".example.com", "tie", Some(NOW + 120))
+                    .created(NOW - 30)
+                    .port(8443),
+                // Another path is another cookie.
+                row(".example.com", "tie", None).path("/other"),
+            ],
+        );
+        let store = ChromiumStore::of(dir.path()).unwrap();
+        let cookies = read(&store, &candidate_domains("example.com"), &key(), NOW).unwrap();
+        let kept: Vec<_> = cookies
+            .iter()
+            .map(|c| (c.name.as_str(), c.path.as_str(), c.expires))
+            .collect();
+        assert_eq!(
+            kept,
+            [
+                ("session", "/", Some(NOW + 120)),
+                ("tie", "/", Some(NOW + 120)),
+                ("tie", "/other", None),
+            ]
+        );
     }
 
     #[test]
