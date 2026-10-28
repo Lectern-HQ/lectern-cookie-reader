@@ -2,6 +2,12 @@
 
 All notable changes to this library. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/) (before 1.0, a minor version may break the API).
 
+## [Unreleased]
+
+### Changed
+- Chromium browsers: only first-party cookies are read (`top_frame_site_key` is empty), as the Firefox reader already does. Partitioned cookies, set while the site was embedded in another site's page, are left out of `read_cookies`, `find_logins` and the app-bound encryption check. Every accepted database version (18 to 24) has the column; Chromium added it in version 15.
+- Chromium browsers: when one cookie is stored more than once for the same domain, name and path (for example set by pages on two ports), only one row counts: the one created last, as in Chromium. Of rows created at the same time, the one with the highest `rowid` counts, so the result is stable. If that row has expired, the cookie is left out, even when an older row has not. Older rows are never decrypted and do not count for the app-bound encryption check or for `find_logins`.
+
 ## [0.5.0] - 2026-10-16
 
 ### Added
@@ -61,7 +67,7 @@ All notable changes to this library. The format follows [Keep a Changelog](https
 - Errors that never contain a cookie value; a denied Keychain dialog is its own error.
 - Dia on macOS.
 
-[Unreleased]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.5.0...HEAD
 [0.5.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Lectern-HQ/lectern-cookie-reader/compare/v0.2.0...v0.3.0
