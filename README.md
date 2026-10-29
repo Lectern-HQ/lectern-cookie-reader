@@ -4,7 +4,7 @@ A small Rust library that reads the login cookies for **one website** from a bro
 
 It is the part of [Lectern](https://github.com/Lectern-HQ) that touches your browser data, published so anyone can check exactly what it does.
 
-Status: version 0.5.0 adds reading a `cookies.txt` for one site; 0.4.0 added the Firefox family, Safari and Windows (see [CHANGELOG.md](CHANGELOG.md)). Reading cookies is tested on macOS with Arc, Dia, Google Chrome, Firefox and Safari; the other browsers and Windows are in the library but not tested on a real computer yet.
+Status: version 0.5.1 reads only first-party Chromium cookies, one row per cookie; 0.5.0 added reading a `cookies.txt` for one site; 0.4.0 added the Firefox family, Safari and Windows (see [CHANGELOG.md](CHANGELOG.md)). Reading cookies is tested on macOS with Arc, Dia, Google Chrome, Firefox and Safari; the other browsers and Windows are in the library but not tested on a real computer yet.
 
 ## Usage
 
