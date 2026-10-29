@@ -4,7 +4,7 @@ A small Rust library that reads the login cookies for **one website** from a bro
 
 It is the part of [Lectern](https://github.com/Lectern-HQ) that touches your browser data, published so anyone can check exactly what it does.
 
-Status: version 0.5.0 adds reading a `cookies.txt` for one site; 0.4.0 added the Firefox family, Safari and Windows (see [CHANGELOG.md](CHANGELOG.md)). Reading cookies is tested on macOS with Arc, Dia, Google Chrome, Firefox and Safari; the other browsers and Windows are in the library but not tested on a real computer yet.
+Status: version 0.5.1 reads only first-party Chromium cookies, one row per cookie; 0.5.0 added reading a `cookies.txt` for one site; 0.4.0 added the Firefox family, Safari and Windows (see [CHANGELOG.md](CHANGELOG.md)). Reading cookies is tested on macOS with Arc, Dia, Google Chrome, Firefox and Safari; the other browsers and Windows are in the library but not tested on a real computer yet.
 
 ## Usage
 
@@ -91,7 +91,7 @@ Every error says what failed, never a cookie value. The ones an app usually hand
 ## What it does
 
 1. Copies the profile's cookie database into a temporary folder only you can open. The browser's own file is never opened or changed. On Windows, Chromium browsers lock that file while they run, so the browser has to be closed first (`DatabaseLocked`).
-2. Looks for cookies of the website you asked about, using standard cookie domain matching. This step only reads site names, which browsers store unencrypted. If there are none, it stops here and macOS shows no dialog.
+2. Looks for cookies of the website you asked about, using standard cookie domain matching. This step only reads site names, which browsers store unencrypted. If there are none, it stops here and macOS shows no dialog. Only the cookies a normal tab sends are used: first-party cookies, not partitioned cookies set while the site was embedded in another site's page. When a Chromium browser stores the same cookie twice (same domain, name and path), only the newest row counts.
 3. For Chromium browsers, gets the browser's key. On macOS it asks for the "Safe Storage" key through Apple's Keychain API: macOS shows its own dialog first, and you decide. On Windows it reads the key from the browser's `Local State` file and unprotects it with DPAPI, which works only for your Windows account and shows no dialog. If the site's cookies use Chrome's app-bound encryption, it stops here with `AppBoundEncryption`.
 4. Decrypts only the cookies that match that website, and refuses any value the browser stored for another site. The Firefox family and Safari store values without encryption, so steps 3 and 4 do not apply; only the cookies of normal tabs are read, not those of Firefox containers. Safari's file is read into memory that is cleared afterwards, not copied, and only after the user allowed it.
 5. If asked, writes them to a `cookies.txt` file readable only by you, deleted as soon as the app is done with it.

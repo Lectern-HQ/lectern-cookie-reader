@@ -20,8 +20,9 @@ pub(crate) trait Schema {
     const HOST: &'static str;
     /// The column with the time the browser last sent the cookie.
     const LAST_ACCESS: &'static str;
-    /// SQL condition for the rows the browser would send: unexpired, and in the normal
-    /// browsing context. `?1` is the current time from [`Schema::now`].
+    /// SQL condition for the rows the browser would send: in the normal browsing context,
+    /// the one row of its cookie that counts where a cookie can be stored twice, and
+    /// unexpired. `?1` is the current time from [`Schema::now`].
     const SENDABLE: &'static str;
 
     /// The cookie database in the profile folder `profile_dir`.

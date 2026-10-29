@@ -33,6 +33,11 @@ pub(crate) use unsupported::{
     user_data_dir,
 };
 
+/// What the user does when the system refuses a file, where the system names no setting
+/// for it (Windows and the systems not supported yet).
+#[cfg(not(target_os = "macos"))]
+const ALLOW_READING_HINT: &str = "allow this app to read it first";
+
 /// `browser`'s details for `system`, or [`crate::Error::Unsupported`] when the catalog has
 /// none: the browser does not exist there, or is not read there.
 #[cfg(any(target_os = "macos", windows))]

@@ -24,6 +24,13 @@ pub(crate) fn normalize_host(host: &str) -> Result<String> {
     }
 }
 
+/// Whether a cookie stored under `domain`, expiring at `expires` (Unix seconds, `None` for
+/// a session cookie), is sent to a host whose candidate domains are `domains` at `now`:
+/// the one rule for readers that filter cookies themselves instead of in SQL.
+pub(crate) fn is_sent(domain: &str, expires: Option<i64>, domains: &[String], now: i64) -> bool {
+    expires.is_none_or(|at| at > now) && domains.iter().any(|d| d == domain)
+}
+
 /// Every stored domain value that can apply to `host`, for an exact database lookup.
 ///
 /// For `www.example.com` this is `www.example.com`, `.www.example.com`, `.example.com`.
@@ -63,6 +70,21 @@ pub fn host_of_link(link: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_cookie_is_sent_while_unexpired_and_for_one_of_the_domains() {
+        let domains = candidate_domains("www.unige.ch");
+        assert!(is_sent(".unige.ch", Some(20), &domains, 10));
+        assert!(
+            is_sent("www.unige.ch", None, &domains, 10),
+            "a session cookie"
+        );
+        assert!(!is_sent(".unige.ch", Some(10), &domains, 10), "expired");
+        assert!(
+            !is_sent("unige.ch", Some(20), &domains, 10),
+            "host-only for another host"
+        );
+    }
+
     use super::*;
 
     #[test]
